@@ -74,6 +74,7 @@ class _WebViewScreenState extends State<WebViewScreen> with WidgetsBindingObserv
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // Get the status bar height after the first frame is rendered
       _statusBarHeight = MediaQuery.of(context).padding.top;
+      developer.log('Loading rasengan with URL: $_url', name: 'rasengan');
       _setupWebView();
     });
   }
@@ -160,6 +161,7 @@ class _WebViewScreenState extends State<WebViewScreen> with WidgetsBindingObserv
           },
           onWebResourceError: (WebResourceError error) {
             developer.log('WebView error: ${error.errorCode} - ${error.description}', name: 'WebView');
+            developer.log('Error details: isForMainFrame=${error.isForMainFrame}, url=${error.url}', name: 'WebView');
             // Only set error state for major errors, not for resource loading errors
             if (error.isForMainFrame ?? false) {
               setState(() {
