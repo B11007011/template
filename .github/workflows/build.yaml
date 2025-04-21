@@ -44,12 +44,6 @@ jobs:
         run: |
           flutter pub get
 
-      # 9.
-
-
-      # 10.
-     
-
       # 11.
       - name: Cache Gradle packages
         uses: actions/cache@v4
@@ -64,6 +58,9 @@ jobs:
       # 12.
       - name: Build Android APK and App Bundle
         run: |
+          # Clean any previous builds to avoid signature issues
+          flutter clean
+          
           echo "Building APK..."
           flutter build apk --release --dart-define=APP_NAME="WebView App" --dart-define=WEBVIEW_URL="https://flutter.dev"
           if [ $? -ne 0 ]; then
