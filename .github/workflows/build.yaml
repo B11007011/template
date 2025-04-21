@@ -1,5 +1,5 @@
 # 1.
-name: Test & Build
+name: Android Build
 
 # 2.
 on:
@@ -11,15 +11,15 @@ on:
     branches:
       - main
       - dev
+  workflow_dispatch:  # Allow manual triggering
 
 # 3.
 jobs:
-  main:
-    runs-on: macos-latest
+  build-android:
+    runs-on: ubuntu-latest  # Ubuntu is sufficient for Android builds
 
     # 4.
     steps:
-
       # 5.
       - name: Clone repository
         uses: actions/checkout@v4
@@ -29,7 +29,7 @@ jobs:
         uses: actions/setup-java@v3
         with:
           distribution: 'zulu'
-          java-version: "18.x"
+          java-version: "17.x"  # Updated to a more stable JDK version
 
       # 7.
       - name: Set up Flutter
@@ -37,6 +37,7 @@ jobs:
         with:
           channel: 'stable'
           flutter-version: '3.29.2'
+          cache: true  # Enable Flutter cache for faster builds
 
       # 8.
       - name: Get Flutter packages
@@ -54,26 +55,37 @@ jobs:
           flutter test
 
       # 11.
-      - name: Build APK
-        run: |
-          flutter build apk --dart-define=APP_NAME="rasengan" --dart-define=WEBVIEW_URL="https://flutter.dev"
+      - name: Cache Gradle packages
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
 
       # 12.
-      - name: Flutter build ipa
+      - name: Build Android APK and App Bundle
         run: |
-          flutter build ipa --no-codesign --dart-define=APP_NAME="rasengan" --dart-define=WEBVIEW_URL="https://flutter.dev"
+          # Build APK
+          flutter build apk --release --dart-define=APP_NAME="WebView App" --dart-define=WEBVIEW_URL="https://flutter.dev"
+          
+          # Build AAB (Android App Bundle for Google Play Store)
+          flutter build appbundle --release --dart-define=APP_NAME="WebView App" --dart-define=WEBVIEW_URL="https://flutter.dev"
 
       # 13.
-      - name: Compress Archives and IPAs
-        run: |
-          cd build
-          tar -czf ios_build.tar.gz ios
-
-      # 14.
-      - name: Upload Artifacts
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v3
         with:
-          name: Releases
-          path: |
-            build/app/outputs/flutter-apk/app-release.apk
-            build/ios_build.tar.gz
+          name: android-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 7  # Keep artifacts for 7 days
+
+      # 14.
+      - name: Upload AAB Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: android-aab
+          path: build/app/outputs/bundle/release/app-release.aab
+          retention-days: 7  # Keep artifacts for 7 days

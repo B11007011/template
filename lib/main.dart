@@ -74,7 +74,7 @@ class _WebViewScreenState extends State<WebViewScreen> with WidgetsBindingObserv
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // Get the status bar height after the first frame is rendered
       _statusBarHeight = MediaQuery.of(context).padding.top;
-      developer.log('Loading rasengan with URL: $_url', name: 'rasengan');
+      developer.log('Loading WebView with URL: $_url', name: 'WebView');
       _setupWebView();
     });
   }

@@ -8,7 +8,7 @@ plugins {
 android {
     namespace = "com.example.template"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    ndkVersion = "27.0.12077973"  // Fixed NDK version for webview_flutter_android compatibility
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
