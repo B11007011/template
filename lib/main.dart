@@ -67,6 +67,38 @@ class _WebViewScreenState extends State<WebViewScreen> with WidgetsBindingObserv
   // Use the constants defined at the top of the file
   final String _url = primaryUrl;
 
+  // Count down timer for auto-retry
+  int _retryCountdown = 5;
+  bool _isRetryingAutomatically = false;
+  
+  void _startRetryCountdown() {
+    _retryCountdown = 5;
+    _isRetryingAutomatically = true;
+    _updateCountdown();
+  }
+  
+  void _updateCountdown() {
+    if (_retryCountdown > 0) {
+      Future.delayed(const Duration(seconds: 1), () {
+        if (mounted && _isRetryingAutomatically) {
+          setState(() {
+            _retryCountdown--;
+          });
+          _updateCountdown();
+        }
+      });
+    } else {
+      if (mounted && _isRetryingAutomatically) {
+        setState(() {
+          _hasError = false;
+          _isLoading = true;
+          _isRetryingAutomatically = false;
+        });
+        _setupWebView();
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -114,24 +146,24 @@ class _WebViewScreenState extends State<WebViewScreen> with WidgetsBindingObserv
           ..setBackgroundColor(Colors.transparent);
       }
 
+      // Enable JavaScript
       await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
+      
+      // Set transparent background
       await controller.setBackgroundColor(Colors.transparent);
       
-      // Set custom user agent to improve compatibility
-      await controller.setUserAgent('Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36');
+      // Set custom user agent for better compatibility
+      await controller.setUserAgent('Mozilla/5.0 (Linux; Android 12; SM-G991U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Mobile Safari/537.36');
       
-      // Add these settings to help with cross-origin issues
-      // For DOM storage (localStorage and sessionStorage)
-      await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
-      
-      // Enable cross-origin requests
+      // Configure additional settings for WebView
       if (controller.platform is AndroidWebViewController) {
         final AndroidWebViewController androidController = controller.platform as AndroidWebViewController;
-        // Android-specific settings that might help
         androidController.setMediaPlaybackRequiresUserGesture(false);
         androidController.setBackgroundColor(Colors.transparent);
+        
+        // Note: Advanced settings like setDomStorageEnabled are not available in this version
       }
-      
+
       await controller.setNavigationDelegate(
         NavigationDelegate(
           onUrlChange: (UrlChange change) {
@@ -162,12 +194,20 @@ class _WebViewScreenState extends State<WebViewScreen> with WidgetsBindingObserv
           onWebResourceError: (WebResourceError error) {
             developer.log('WebView error: ${error.errorCode} - ${error.description}', name: 'WebView');
             developer.log('Error details: isForMainFrame=${error.isForMainFrame}, url=${error.url}', name: 'WebView');
+            
             // Only set error state for major errors, not for resource loading errors
             if (error.isForMainFrame ?? false) {
               setState(() {
                 _isLoading = false;
                 _hasError = true;
                 _errorMessage = '${error.errorCode}: ${error.description}';
+                
+                // Start auto-retry countdown for specific errors
+                if (error.description.contains('ERR_CACHE_MISS') || 
+                    error.description.contains('net::ERR') ||
+                    error.description.contains('ERR_CONNECTION')) {
+                  _startRetryCountdown();
+                }
               });
             }
           },
@@ -176,13 +216,14 @@ class _WebViewScreenState extends State<WebViewScreen> with WidgetsBindingObserv
 
       // Try an alternative approach to load the URL
       try {
-        // Add headers that might help with CORS and ORB issues
+        // Add cache control headers to prevent ERR_CACHE_MISS
         await controller.loadRequest(
           Uri.parse(_url),
           headers: {
             'Accept': '*/*',
             'Access-Control-Allow-Origin': '*',
-            'Cache-Control': 'no-cache',
+            'Cache-Control': 'max-age=3600',  // Cache content for up to 1 hour
+            'Pragma': 'no-cache',             // For backwards compatibility
             'Connection': 'keep-alive',
           },
         );
@@ -342,16 +383,43 @@ class _WebViewScreenState extends State<WebViewScreen> with WidgetsBindingObserv
                                 textAlign: TextAlign.center,
                               ),
                               const SizedBox(height: 16),
-                              ElevatedButton(
-                                onPressed: () {
-                                  setState(() {
-                                    _hasError = false;
-                                    _isLoading = true;
-                                  });
-                                  _setupWebView();
-                                },
-                                child: Text('Retry'),
-                              ),
+                              if (_isRetryingAutomatically) ...[
+                                Text(
+                                  'Auto-retrying in $_retryCountdown seconds...',
+                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 8),
+                                LinearProgressIndicator(
+                                  value: (5 - _retryCountdown) / 5, // Progress from 0 to 1
+                                  backgroundColor: Colors.grey[300],
+                                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
+                                ),
+                                const SizedBox(height: 16),
+                                TextButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      _isRetryingAutomatically = false;
+                                    });
+                                  },
+                                  child: const Text('Cancel auto-retry'),
+                                ),
+                              ] else
+                                ElevatedButton.icon(
+                                  onPressed: () {
+                                    setState(() {
+                                      _hasError = false;
+                                      _isLoading = true;
+                                    });
+                                    _setupWebView();
+                                  },
+                                  icon: const Icon(Icons.refresh),
+                                  label: const Text('Retry Now', style: TextStyle(fontSize: 16)),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.blue,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                                  ),
+                                ),
                             ],
                           ),
                         ),

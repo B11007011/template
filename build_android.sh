@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script to build and install Android app
+# Script to build and install Android app in debug mode
 echo "========== Cleaning previous builds =========="
 flutter clean
 
@@ -10,8 +10,15 @@ flutter pub get
 echo "========== Building debug APK =========="
 flutter build apk --debug --dart-define=APP_NAME="WebView App" --dart-define=WEBVIEW_URL="https://flutter.dev"
 
-echo "========== Installing new app version =========="
-# Use flutter install which handles device detection and installation
-flutter install --debug
-
-echo "========== Build completed ==========" 
+if [ $? -eq 0 ]; then
+  echo "========== Debug build successful =========="
+  echo "APK location: $(pwd)/build/app/outputs/flutter-apk/app-debug.apk"
+  
+  echo "========== Installing debug APK =========="
+  flutter install --debug
+  
+  echo "========== Installation completed =========="
+else
+  echo "========== Build failed! =========="
+  echo "Please check the error messages above"
+fi 
