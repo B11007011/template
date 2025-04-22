@@ -12,6 +12,15 @@ on:
       - main
       - dev
   workflow_dispatch:  # Allow manual triggering
+    inputs:
+      url:
+        description: 'Website URL to load in WebView'
+        required: true
+        default: 'https://flutter.dev'
+      app_name:
+        description: 'Application display name'
+        required: true
+        default: 'WebView App'
 
 # 3.
 jobs:
@@ -58,22 +67,17 @@ jobs:
       # 12.
       - name: Build Android APK and App Bundle
         run: |
-          # Clean any previous builds to avoid signature issues
           flutter clean
           
           echo "Building APK..."
-          flutter build apk --release --dart-define=APP_NAME="WebView App" --dart-define=WEBVIEW_URL="https://flutter.dev"
-          if [ $? -ne 0 ]; then
-            echo "APK build failed"
-            exit 1
-          fi
+          flutter build apk --release \
+            --dart-define=APP_NAME="${{ github.event.inputs.app_name }}" \
+            --dart-define=WEBVIEW_URL="${{ github.event.inputs.url }}"
           
           echo "Building App Bundle (AAB)..."
-          flutter build appbundle --release --dart-define=APP_NAME="WebView App" --dart-define=WEBVIEW_URL="https://flutter.dev"
-          if [ $? -ne 0 ]; then
-            echo "App Bundle build failed"
-            exit 1
-          fi
+          flutter build appbundle --release \
+            --dart-define=APP_NAME="${{ github.event.inputs.app_name }}" \
+            --dart-define=WEBVIEW_URL="${{ github.event.inputs.url }}"
         shell: bash
 
       # 13.
