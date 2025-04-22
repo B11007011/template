@@ -15,12 +15,14 @@ on:
     inputs:
       url:
         description: 'Website URL to load in WebView'
-        required: true
+        required: false
         default: 'https://flutter.dev'
       app_name:
         description: 'Application display name'
-        required: true
+        required: false
         default: 'WebView App'
+  repository_dispatch:
+    types: [build-android-request]
 
 # 3.
 jobs:
@@ -69,15 +71,22 @@ jobs:
         run: |
           flutter clean
           
+          # Use input values if provided through workflow_dispatch, otherwise use values from repository_dispatch or defaults
+          APP_NAME="${{ github.event.inputs.app_name || github.event.client_payload.app_name || 'WebView App' }}"
+          WEBVIEW_URL="${{ github.event.inputs.url || github.event.client_payload.url || 'https://flutter.dev' }}"
+          
+          echo "Building with APP_NAME: $APP_NAME"
+          echo "Building with WEBVIEW_URL: $WEBVIEW_URL"
+          
           echo "Building APK..."
           flutter build apk --release \
-            --dart-define=APP_NAME="${{ github.event.inputs.app_name }}" \
-            --dart-define=WEBVIEW_URL="${{ github.event.inputs.url }}"
+            --dart-define=APP_NAME="$APP_NAME" \
+            --dart-define=WEBVIEW_URL="$WEBVIEW_URL"
           
           echo "Building App Bundle (AAB)..."
           flutter build appbundle --release \
-            --dart-define=APP_NAME="${{ github.event.inputs.app_name }}" \
-            --dart-define=WEBVIEW_URL="${{ github.event.inputs.url }}"
+            --dart-define=APP_NAME="$APP_NAME" \
+            --dart-define=WEBVIEW_URL="$WEBVIEW_URL"
         shell: bash
 
       # 13.
