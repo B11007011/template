@@ -82,7 +82,13 @@ jobs:
           
           echo "Building with APP_NAME: $APP_NAME"
           echo "Building with WEBVIEW_URL: $WEBVIEW_URL"
-          echo "Build ID for tracking: $BUILD_ID"
+         
+          
+          # Escape special characters in APP_NAME for sed
+          ESCAPED_APP_NAME=$(echo "$APP_NAME" | sed 's/[\/&]/\\&/g')
+          
+          # Update app name in strings.xml
+          sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">$ESCAPED_APP_NAME<\/string>/g" android/app/src/main/res/values/strings.xml
           
           echo "Building APK..."
           flutter build apk --release \
