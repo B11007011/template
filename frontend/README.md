@@ -1,16 +1,24 @@
-# WebView App Builder Frontend
+# WebView App Builder
 
-This is a simple HTML-based frontend that allows you to trigger GitHub Actions workflow for building Android WebView apps and download the resulting APKs.
+A modern SaaS-like web application that allows users to build Android WebView apps by simply specifying an app name and a URL, without needing to understand the underlying GitHub Actions implementation.
 
 ## Features
 
-- Trigger Android app builds through GitHub Actions
-- Configure app name and WebView URL
-- Monitor build status
-- Download APK files directly or via QR code
-- View build history
-- Multiple API methods for triggering builds
-- Firebase Firestore integration for build status tracking
+- Clean, modern UI similar to commercial app building platforms
+- Simple two-field interface for creating apps (App Name and Website URL)
+- Real-time build status monitoring
+- Automatic APK downloads with QR codes for easy mobile installation
+- View and download previous builds
+- Complete abstraction of GitHub implementation details from end users
+
+## Architecture
+
+The app consists of two main components:
+
+1. **Frontend**: A modern SaaS-like web interface that hides technical implementation details
+2. **Backend**: A Node.js server that proxies requests to GitHub Actions
+
+Behind the scenes, the application uses GitHub Actions workflows to build Android WebView apps, but this is completely hidden from the end user.
 
 ## Installation and Setup
 
@@ -21,14 +29,14 @@ This is a simple HTML-based frontend that allows you to trigger GitHub Actions w
    npm install
    ```
 
-4. **Configure your GitHub token and Firebase** (choose one method):
+4. **Configure the backend** (choose one method):
 
    ### Option 1: Using .env file (recommended)
    
    Create a `.env` file in the frontend directory with the following content:
    
    ```
-   # GitHub Configuration
+   # GitHub Configuration (Hidden from users)
    GITHUB_REPOSITORY=username/repo-name
    GITHUB_TOKEN=your_personal_access_token
    
@@ -40,37 +48,13 @@ This is a simple HTML-based frontend that allows you to trigger GitHub Actions w
 
    ### Option 2: Using config.js file
    
-   - Create a Personal Access Token on GitHub with appropriate permissions (`workflow` and `repo`)
    - Copy the `config.example.js` file to `config.js`:
      ```
      cp config.example.js config.js
      ```
-   - Edit `config.js` and add your token:
-     ```javascript
-     // In config.js
-     const CONFIG = {
-       github: {
-         owner: 'B11007011',  // Your GitHub username
-         repo: 'template',     // Your repository name
-         token: 'ghp_your_token_here'  // Your GitHub token
-       },
-       // ...
-     };
-     ```
-
-   ### Firebase Configuration (optional)
+   - Edit `config.js` and add your GitHub token and repository details
    
-   If you want to track build status with Firebase Firestore:
-   
-   1. Create a Firebase project at [firebase.google.com](https://firebase.google.com)
-   2. Generate a service account key from Firebase Console > Project Settings > Service Accounts
-   3. Copy the `firebase-service-account.example.json` file:
-      ```
-      cp firebase-service-account.example.json firebase-service-account.json
-      ```
-   4. Paste your service account JSON data into this file
-   
-   **IMPORTANT**: Never commit any of these files to the repository!
+   **IMPORTANT**: Never commit any configuration files containing tokens to your repository!
 
 5. Run the local development server:
    ```
@@ -79,144 +63,57 @@ This is a simple HTML-based frontend that allows you to trigger GitHub Actions w
 
 6. Open your browser to http://localhost:3000
 
-## How to Use
+## User Interface
 
-### Using the Interface
+The application provides a streamlined experience for users:
 
-#### Building Apps
+### Building Apps
 
-1. Navigate to the "Build New App" tab
-2. Fill in the required information:
-   - **GitHub Personal Access Token**: Will be pre-filled if configured
-   - **Repository Owner**: Will be pre-filled if configured
-   - **Repository Name**: Will be pre-filled if configured
-   - **App Name**: The name you want for your Android app
-   - **Website URL**: The URL to load in the WebView
-   - **Build ID** (optional): An ID for tracking the build in Firestore (if configured)
+1. Enter an App Name
+2. Enter the Website URL you want to load in the WebView
+3. Click "Build App"
+4. Wait for the build to complete (progress is shown automatically)
+5. Download the APK directly or scan the QR code with your mobile device
 
-3. Click "Trigger Build" to start the workflow
+### Viewing Previous Builds
 
-#### Viewing and Downloading Builds
-
-1. Navigate to the "Previous Builds" tab
-2. Enter your GitHub credentials (token, owner, repo name) if not already pre-filled
-3. Click "Check Recent Builds"
-4. For each successful build, you'll see:
-   - Build information (app name, timestamps, etc.)
-   - A QR code linking to the APK download
-   - A direct download button for the APK
-
-5. Scan the QR code with a mobile device to download the APK directly to your phone
-
-### How the QR Code Downloads Work
-
-The APK download system works in two stages:
-
-1. **API Proxy**: The frontend uses a proxy API (`/api/download`) to:
-   - Download the APK from GitHub using your personal access token
-   - Extract the APK file from the ZIP archive provided by GitHub
-   - Store it temporarily on the server
-   - Create a direct download link that doesn't require authentication
-
-2. **QR Code**: The QR code contains a direct download URL to the cached APK file 
-   - This URL can be accessed from any device without requiring GitHub authentication
-   - When scanned on a mobile device, it allows direct download of the APK
-
-This two-stage process keeps your GitHub token secure while allowing for easy APK installation.
-
-## Security Notes
-
-⚠️ **IMPORTANT**: 
-
-1. The `config.js` and `.env` files contain sensitive information and should NEVER be committed to a repository
-2. The server is for local development only and should not be deployed to a public server without adding proper security measures
-3. The token storage mechanism used is in-memory only (cleared on server restart) for development purposes
-4. For production use, implement proper token management with OAuth or a similar secure method
-
-## Available Interfaces
-
-- **index.html**: Uses the `workflow_dispatch` event (requires `workflow` permission)
-- **repository-dispatch.html**: Uses the `repository_dispatch` event (requires `repo` permission)
+1. Click "View Recent Builds" on the main dashboard
+2. Browse through previous builds
+3. Download APKs or scan QR codes for any previous successful build
 
 ## Technical Details
 
-### GitHub API Endpoints Used
+### Behind the Scenes
 
-For workflow_dispatch:
-```
-POST https://api.github.com/repos/{owner}/{repo}/actions/workflows/build.yaml/dispatches
-```
+The application uses GitHub Actions to build Android apps through a WebView template. When a user requests a build:
 
-For repository_dispatch:
-```
-POST https://api.github.com/repos/{owner}/{repo}/dispatches
-```
+1. The frontend sends a request to the server
+2. The server uses the configured GitHub token to trigger a GitHub Actions workflow
+3. The workflow builds the Android app using Flutter
+4. The server periodically checks the build status
+5. When complete, the APK is extracted and made available for download
+6. A QR code is generated for easy mobile installation
 
-For checking workflow runs:
-```
-GET https://api.github.com/repos/{owner}/{repo}/actions/runs
-```
+### Security Notes
 
-For getting artifacts:
-```
-GET https://api.github.com/repos/{owner}/{repo}/actions/runs/{run_id}/artifacts
-```
+⚠️ **IMPORTANT**: 
 
-For downloading artifacts:
-```
-GET https://api.github.com/repos/{owner}/{repo}/actions/artifacts/{artifact_id}/zip
-```
+1. The `.env` and `config.js` files contain sensitive information and should NEVER be committed to a repository
+2. This server is for local development or internal use only - additional security measures are needed for public deployment
+3. The token storage mechanism is in-memory only (cleared on server restart)
+4. For production use, implement proper token management with OAuth or a similar secure method
 
-### Required GitHub Token Permissions
+## Customization
 
-- For workflow_dispatch: The GitHub token needs the `workflow` scope
-- For repository_dispatch: The GitHub token needs the `repo` scope
-- For downloading artifacts: The GitHub token needs the `repo` scope
+You can customize the appearance by modifying:
+
+- `styles.css` - Contains all styling for the application
+- `app-builder.html` - The main HTML template
+- `images/logo.svg` - The application logo
 
 ## Dependencies
 
 - [QRCode.js](https://github.com/davidshimjs/qrcodejs) - For generating QR codes
 - [adm-zip](https://github.com/cthackers/adm-zip) - For extracting APK files from GitHub artifact ZIP files
 - [firebase-admin](https://www.npmjs.com/package/firebase-admin) - For Firestore integration (optional)
-- [dotenv](https://www.npmjs.com/package/dotenv) - For loading environment variables
-
-## File Management
-
-The server manages downloaded files in two directories:
-- `downloads/`: Stores extracted APK files ready for download
-- `temp/`: Temporarily stores ZIP files during the extraction process
-
-Files older than 24 hours are automatically cleaned up to save disk space.
-
-## Local Storage
-
-The application stores the following data in your browser's local storage:
-- Your repository settings (for convenience)
-- Recent build history (for quick reference)
-
-No GitHub tokens are stored permanently.
-
-## Customization
-
-You can modify the HTML files to add more fields or change the styling as needed. 
-
-## Firebase Integration
-
-If Firebase is configured, the app will:
-
-1. Track build statuses in Firestore
-2. Update build progress in real-time
-3. Store build metadata for future reference
-
-The Firestore database structure uses a collection called `builds` with documents identified by the build ID. Each document contains:
-
-- `id`: The build ID
-- `status`: Current build status (pending, in_progress, completed, failed)
-- `appName`: The name of the application
-- `webviewUrl`: The URL loaded in the WebView
-- `createdAt`: Timestamp when the build was initiated
-- `updatedAt`: Timestamp of the last status update
-- `completedAt`: Timestamp when the build completed (if successful)
-- `artifactUrl`: URL to the build artifact (if available)
-- `owner`: Repository owner
-- `repo`: Repository name 
+- [dotenv](https://www.npmjs.com/package/dotenv) - For loading environment variables 

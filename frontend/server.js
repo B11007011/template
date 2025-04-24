@@ -646,7 +646,8 @@ const server = http.createServer(async (req, res) => {
   // For normal static files
   let filePath = parsedUrl.pathname;
   if (filePath === '/') {
-    filePath = '/index.html';
+    // Serve the app-builder.html as the main entry point
+    filePath = '/app-builder.html';
   }
 
   // Get the full path to the requested file
@@ -692,8 +693,6 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`WebView App Builder server is running at http://localhost:${PORT}/`);
-  console.log(`Main interface: http://localhost:${PORT}/`);
-  console.log(`Alternative interface: http://localhost:${PORT}/repository-dispatch.html`);
   console.log(`\nIMPORTANT: This server is for local development only. Never deploy`);
   console.log(`          this application to a public server without proper security measures.`);
 }); 
