@@ -1,0 +1,17 @@
+{
+  "name": "webview-app-builder-frontend",
+  "version": "1.0.0",
+  "description": "Frontend to trigger GitHub Actions for WebView App builds",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "postinstall": "npm install adm-zip firebase-admin dotenv"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.10",
+    "firebase-admin": "^11.9.0",
+    "dotenv": "^16.0.3"
+  },
+  "author": "",
+  "license": "MIT"
+} 
