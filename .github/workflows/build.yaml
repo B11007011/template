@@ -78,31 +78,24 @@ jobs:
             --dart-define=APP_NAME="$APP_NAME" \
             --dart-define=WEBVIEW_URL="$WEBVIEW_URL"
 
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
+          
+      - name: Set up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.FIREBASE_PROJECT_ID }}
+
       - name: Upload to Firebase Storage
         if: success()
-        env:
-          FIREBASE_SERVICE_ACCOUNT_BASE64: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
         run: |
-          # Decode service account
-          echo "$FIREBASE_SERVICE_ACCOUNT_BASE64" | base64 -d > /tmp/service-account.json
-          chmod 600 /tmp/service-account.json
-          
-          # Install minimal gcloud components
-          echo "Installing gcloud CLI..."
-          curl -sSL https://sdk.cloud.google.com > /tmp/install.sh
-          bash /tmp/install.sh --install-dir=/tmp/gcloud --disable-prompts --quiet
-          
-          # Add to PATH without relying on bashrc
-          export PATH=/tmp/gcloud/google-cloud-sdk/bin:$PATH
-          
-          # Authenticate
-          gcloud auth activate-service-account --key-file=/tmp/service-account.json
-          gcloud config set project $FIREBASE_PROJECT_ID
-          
-          # Upload files
+          # Create build path
           BUILD_PATH="builds/$BUILD_ID"
           echo "Uploading artifacts to $BUILD_PATH..."
           
+          # Upload files
           gsutil cp build/app/outputs/flutter-apk/app-release.apk gs://$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.apk
           gsutil cp build/app/outputs/bundle/release/app-release.aab gs://$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.aab
           
@@ -114,32 +107,11 @@ jobs:
           echo "APK_URL=https://storage.googleapis.com/$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.apk" >> $GITHUB_ENV
           echo "AAB_URL=https://storage.googleapis.com/$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.aab" >> $GITHUB_ENV
           echo "BUILD_PATH=$BUILD_PATH" >> $GITHUB_ENV
-          
-          # Cleanup
-          rm -f /tmp/service-account.json
-          rm -rf /tmp/gcloud
-          rm -f /tmp/install.sh
 
       - name: Update Firestore
         if: ${{ github.event.inputs.build_id != '' || github.event.client_payload.build_id != '' }}
-        env:
-          FIREBASE_SERVICE_ACCOUNT_BASE64: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
         run: |
-          # Decode service account
-          echo "$FIREBASE_SERVICE_ACCOUNT_BASE64" | base64 -d > /tmp/service-account.json
-          chmod 600 /tmp/service-account.json
-          
-          # Install minimal gcloud components
-          echo "Installing gcloud CLI for authentication..."
-          curl -sSL https://sdk.cloud.google.com > /tmp/install.sh
-          bash /tmp/install.sh --install-dir=/tmp/gcloud --disable-prompts --quiet
-          
-          # Add to PATH without relying on bashrc
-          export PATH=/tmp/gcloud/google-cloud-sdk/bin:$PATH
-          
-          # Authenticate and get token
-          gcloud auth activate-service-account --key-file=/tmp/service-account.json
-          gcloud config set project $FIREBASE_PROJECT_ID
+          # Get access token (already authenticated by the auth action)
           ACCESS_TOKEN=$(gcloud auth print-access-token)
           
           echo "Updating Firestore document for build $BUILD_ID..."
@@ -156,11 +128,6 @@ jobs:
                 "buildPath": {"stringValue": "'$BUILD_PATH'"}
               }
             }'
-          
-          # Cleanup
-          rm -f /tmp/service-account.json
-          rm -rf /tmp/gcloud
-          rm -f /tmp/install.sh
 
       - name: Upload Artifacts (Backup)
         uses: actions/upload-artifact@v4
