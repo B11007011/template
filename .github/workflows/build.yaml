@@ -116,6 +116,7 @@ jobs:
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
           BUILD_ID: ${{ env.BUILD_ID }}
           FIREBASE_SERVICE_ACCOUNT_BASE64: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
+          FIREBASE_STORAGE_BUCKET: "trader-35173.firebasestorage.app"
         run: |
           echo "Updating Firestore document for build $BUILD_ID..."
           

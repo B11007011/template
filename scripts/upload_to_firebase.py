@@ -96,6 +96,7 @@ def main():
     # Initialize Firebase app
     try:
         cred = credentials.Certificate(temp_key_path)
+        app = None
         
         # Try different bucket format approaches
         try:
@@ -105,13 +106,13 @@ def main():
                 if firebase_storage_bucket.startswith('gs://'):
                     firebase_storage_bucket = firebase_storage_bucket[5:]
                     
-                firebase_admin.initialize_app(cred, {
+                app = firebase_admin.initialize_app(cred, {
                     'storageBucket': firebase_storage_bucket
                 })
                 print(f"Initialized Firebase app with explicit bucket: {firebase_storage_bucket}")
             else:
                 # Approach 1: Using the standard project ID based bucket name
-                firebase_admin.initialize_app(cred, {
+                app = firebase_admin.initialize_app(cred, {
                     'storageBucket': f"{firebase_project_id}.appspot.com"
                 })
                 print(f"Initialized Firebase app with bucket: {firebase_project_id}.appspot.com")
@@ -122,7 +123,7 @@ def main():
                 
             try:
                 # Approach 2: Using just the project ID as bucket name
-                firebase_admin.initialize_app(cred, {
+                app = firebase_admin.initialize_app(cred, {
                     'storageBucket': firebase_project_id
                 })
                 print(f"Initialized Firebase app with bucket: {firebase_project_id}")
@@ -133,12 +134,12 @@ def main():
                 print("Attempting to initialize without explicit bucket...")
                 
                 # Initialize without bucket
-                firebase_admin.initialize_app(cred)
+                app = firebase_admin.initialize_app(cred)
                 
                 # Try to get default bucket
                 try:
-                    from firebase_admin import storage
-                    bucket = storage.bucket()
+                    # Import is already done at the top level
+                    bucket = storage.bucket(app=app)
                     print(f"Successfully got default bucket: {bucket.name}")
                 except Exception as e3:
                     print(f"Failed to get default bucket: {e3}")
@@ -147,7 +148,7 @@ def main():
                     raise Exception("Failed to initialize Firebase Storage bucket") from e3
         
         # If we get here, try to access the bucket
-        bucket = storage.bucket()
+        bucket = storage.bucket(app=app)
         print(f"Successfully connected to bucket: {bucket.name}")
         
         # Test bucket existence/permissions with a small operation
