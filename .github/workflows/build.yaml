@@ -106,27 +106,39 @@ jobs:
         if: success()
         env:
           FIREBASE_SERVICE_ACCOUNT_BASE64: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          BUILD_ID: ${{ github.event.inputs.build_id || github.event.client_payload.build_id || github.run_id }}
         run: |
           # Decode service account
           echo "$FIREBASE_SERVICE_ACCOUNT_BASE64" | base64 -d > /tmp/service-account.json
           chmod 600 /tmp/service-account.json
           
-          # Install gcloud CLI
-          curl -sSL https://sdk.cloud.google.com | bash > /dev/null
-          source ~/bashrc
+          # Install gcloud CLI properly
+          echo "Installing gcloud CLI..."
+          curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-slim-linux-x86_64.tar.gz
+          tar -xf google-cloud-cli-slim-linux-x86_64.tar.gz
+          ./google-cloud-sdk/install.sh --quiet
+          # Source the path file directly
+          source ./google-cloud-sdk/path.bash.inc
           
           # Authenticate
+          echo "Authenticating with service account..."
           gcloud auth activate-service-account --key-file=/tmp/service-account.json
           gcloud config set project $FIREBASE_PROJECT_ID
           
           # Upload files
+          echo "Preparing to upload files..."
           BUILD_PATH="builds/$BUILD_ID"
           APK_URL="https://storage.googleapis.com/$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.apk"
           AAB_URL="https://storage.googleapis.com/$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.aab"
           
+          echo "Uploading APK to Firebase Storage..."
           gsutil cp build/app/outputs/flutter-apk/app-release.apk gs://$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.apk
+          
+          echo "Uploading AAB to Firebase Storage..."
           gsutil cp build/app/outputs/bundle/release/app-release.aab gs://$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.aab
           
+          echo "Setting public access permissions..."
           gsutil acl ch -u AllUsers:R gs://$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.apk
           gsutil acl ch -u AllUsers:R gs://$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.aab
           
@@ -134,18 +146,38 @@ jobs:
           echo "APK_URL=$APK_URL" >> $GITHUB_ENV
           echo "AAB_URL=$AAB_URL" >> $GITHUB_ENV
           echo "BUILD_PATH=builds/$BUILD_ID" >> $GITHUB_ENV
+          
+          # Clean up
+          rm -f google-cloud-cli-slim-linux-x86_64.tar.gz
+          rm -rf google-cloud-sdk
+          rm -f /tmp/service-account.json
 
       - name: Update Firestore
-        if: ${{ env.BUILD_ID != '' }}
+        if: ${{ github.event.inputs.build_id != '' || github.event.client_payload.build_id != '' }}
         env:
           FIREBASE_SERVICE_ACCOUNT_BASE64: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          BUILD_ID: ${{ github.event.inputs.build_id || github.event.client_payload.build_id }}
         run: |
+          # Decode service account
           echo "$FIREBASE_SERVICE_ACCOUNT_BASE64" | base64 -d > /tmp/service-account.json
           chmod 600 /tmp/service-account.json
           
+          # Install gcloud CLI for auth token
+          echo "Installing minimal gcloud CLI for authentication..."
+          curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-slim-linux-x86_64.tar.gz
+          tar -xf google-cloud-cli-slim-linux-x86_64.tar.gz
+          ./google-cloud-sdk/install.sh --quiet
+          source ./google-cloud-sdk/path.bash.inc
+          
+          # Get auth token
+          gcloud auth activate-service-account --key-file=/tmp/service-account.json
+          ACCESS_TOKEN=$(gcloud auth print-access-token)
+          
+          echo "Updating Firestore document..."
           curl -X PATCH \
             "https://firestore.googleapis.com/v1/projects/$FIREBASE_PROJECT_ID/databases/(default)/documents/builds/$BUILD_ID" \
-            -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
             -H "Content-Type: application/json" \
             -d '{
               "fields": {
@@ -157,6 +189,9 @@ jobs:
               }
             }'
           
+          # Clean up
+          rm -f google-cloud-cli-slim-linux-x86_64.tar.gz
+          rm -rf google-cloud-sdk
           rm -f /tmp/service-account.json
 
       - name: Upload Artifacts (Backup)
