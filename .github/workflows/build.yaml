@@ -1,17 +1,11 @@
-# 1.
 name: Android Build
 
-# 2.
 on:
   pull_request:
-    branches:
-      - main
-      - dev
+    branches: [main, dev]
   push:
-    branches:
-      - main
-      - dev
-  workflow_dispatch:  # Allow manual triggering
+    branches: [main, dev]
+  workflow_dispatch:
     inputs:
       url:
         description: 'Website URL to load in WebView'
@@ -28,38 +22,33 @@ on:
   repository_dispatch:
     types: [build-android-request]
 
-# 3.
 jobs:
   build-android:
-    runs-on: ubuntu-latest  # Ubuntu is sufficient for Android builds
+    runs-on: ubuntu-latest
+    env:
+      FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+      BUILD_ID: ${{ github.event.inputs.build_id || github.event.client_payload.build_id || github.run_id }}
 
-    # 4.
     steps:
-      # 5.
       - name: Clone repository
         uses: actions/checkout@v4
 
-      # 6.
-      - name: Setup java
+      - name: Setup Java
         uses: actions/setup-java@v3
         with:
           distribution: 'zulu'
-          java-version: "17.x"  # Updated to a more stable JDK version
+          java-version: "17.x"
 
-      # 7.
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           flutter-version: '3.29.2'
-          cache: true  # Enable Flutter cache for faster builds
+          cache: true
 
-      # 8.
       - name: Get Flutter packages
-        run: |
-          flutter pub get
+        run: flutter pub get
 
-      # 11.
       - name: Cache Gradle packages
         uses: actions/cache@v4
         with:
@@ -67,78 +56,53 @@ jobs:
             ~/.gradle/caches
             ~/.gradle/wrapper
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
 
-      # 12.
       - name: Build Android APK and App Bundle
         run: |
           flutter clean
           
-          # Use input values if provided through workflow_dispatch, otherwise use values from repository_dispatch or defaults
           APP_NAME="${{ github.event.inputs.app_name || github.event.client_payload.app_name || 'WebView App' }}"
           WEBVIEW_URL="${{ github.event.inputs.url || github.event.client_payload.url || 'https://flutter.dev' }}"
-          BUILD_ID="${{ github.event.inputs.build_id || github.event.client_payload.build_id || '' }}"
           
           echo "Building with APP_NAME: $APP_NAME"
           echo "Building with WEBVIEW_URL: $WEBVIEW_URL"
-         
           
-          # Escape special characters in APP_NAME for sed
           ESCAPED_APP_NAME=$(echo "$APP_NAME" | sed 's/[\/&]/\\&/g')
-          
-          # Update app name in strings.xml
           sed -i "s/<string name=\"app_name\">.*<\/string>/<string name=\"app_name\">$ESCAPED_APP_NAME<\/string>/g" android/app/src/main/res/values/strings.xml
           
-          echo "Building APK..."
           flutter build apk --release \
             --dart-define=APP_NAME="$APP_NAME" \
             --dart-define=WEBVIEW_URL="$WEBVIEW_URL"
           
-          echo "Building App Bundle (AAB)..."
           flutter build appbundle --release \
             --dart-define=APP_NAME="$APP_NAME" \
             --dart-define=WEBVIEW_URL="$WEBVIEW_URL"
-        shell: bash
 
-      
       - name: Upload to Firebase Storage
         if: success()
         env:
           FIREBASE_SERVICE_ACCOUNT_BASE64: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
-          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
-          BUILD_ID: ${{ github.event.inputs.build_id || github.event.client_payload.build_id || github.run_id }}
         run: |
           # Decode service account
           echo "$FIREBASE_SERVICE_ACCOUNT_BASE64" | base64 -d > /tmp/service-account.json
           chmod 600 /tmp/service-account.json
           
-          # Install gcloud CLI properly
-          echo "Installing gcloud CLI..."
-          curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-slim-linux-x86_64.tar.gz
-          tar -xf google-cloud-cli-slim-linux-x86_64.tar.gz
-          ./google-cloud-sdk/install.sh --quiet
-          # Source the path file directly
-          source ./google-cloud-sdk/path.bash.inc
+          # Install gcloud CLI
+          curl -sSL https://sdk.cloud.google.com | bash > /dev/null
+          source ~/bashrc
           
           # Authenticate
-          echo "Authenticating with service account..."
           gcloud auth activate-service-account --key-file=/tmp/service-account.json
           gcloud config set project $FIREBASE_PROJECT_ID
           
           # Upload files
-          echo "Preparing to upload files..."
           BUILD_PATH="builds/$BUILD_ID"
           APK_URL="https://storage.googleapis.com/$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.apk"
           AAB_URL="https://storage.googleapis.com/$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.aab"
           
-          echo "Uploading APK to Firebase Storage..."
           gsutil cp build/app/outputs/flutter-apk/app-release.apk gs://$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.apk
-          
-          echo "Uploading AAB to Firebase Storage..."
           gsutil cp build/app/outputs/bundle/release/app-release.aab gs://$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.aab
           
-          echo "Setting public access permissions..."
           gsutil acl ch -u AllUsers:R gs://$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.apk
           gsutil acl ch -u AllUsers:R gs://$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.aab
           
@@ -146,38 +110,18 @@ jobs:
           echo "APK_URL=$APK_URL" >> $GITHUB_ENV
           echo "AAB_URL=$AAB_URL" >> $GITHUB_ENV
           echo "BUILD_PATH=builds/$BUILD_ID" >> $GITHUB_ENV
-          
-          # Clean up
-          rm -f google-cloud-cli-slim-linux-x86_64.tar.gz
-          rm -rf google-cloud-sdk
-          rm -f /tmp/service-account.json
 
       - name: Update Firestore
-        if: ${{ github.event.inputs.build_id != '' || github.event.client_payload.build_id != '' }}
+        if: ${{ env.BUILD_ID != '' }}
         env:
           FIREBASE_SERVICE_ACCOUNT_BASE64: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
-          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
-          BUILD_ID: ${{ github.event.inputs.build_id || github.event.client_payload.build_id }}
         run: |
-          # Decode service account
           echo "$FIREBASE_SERVICE_ACCOUNT_BASE64" | base64 -d > /tmp/service-account.json
           chmod 600 /tmp/service-account.json
           
-          # Install gcloud CLI for auth token
-          echo "Installing minimal gcloud CLI for authentication..."
-          curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-slim-linux-x86_64.tar.gz
-          tar -xf google-cloud-cli-slim-linux-x86_64.tar.gz
-          ./google-cloud-sdk/install.sh --quiet
-          source ./google-cloud-sdk/path.bash.inc
-          
-          # Get auth token
-          gcloud auth activate-service-account --key-file=/tmp/service-account.json
-          ACCESS_TOKEN=$(gcloud auth print-access-token)
-          
-          echo "Updating Firestore document..."
           curl -X PATCH \
             "https://firestore.googleapis.com/v1/projects/$FIREBASE_PROJECT_ID/databases/(default)/documents/builds/$BUILD_ID" \
-            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "Authorization: Bearer $(gcloud auth print-access-token)" \
             -H "Content-Type: application/json" \
             -d '{
               "fields": {
@@ -189,9 +133,6 @@ jobs:
               }
             }'
           
-          # Clean up
-          rm -f google-cloud-cli-slim-linux-x86_64.tar.gz
-          rm -rf google-cloud-sdk
           rm -f /tmp/service-account.json
 
       - name: Upload Artifacts (Backup)
