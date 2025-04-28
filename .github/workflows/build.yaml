@@ -94,8 +94,15 @@ jobs:
       - name: Upload to Firebase Storage
         if: success()
         env:
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          BUILD_ID: ${{ env.BUILD_ID }}
           FIREBASE_SERVICE_ACCOUNT_BASE64: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
         run: |
+          # Debug environment variables (masked for security)
+          echo "FIREBASE_PROJECT_ID is set: ${{ env.FIREBASE_PROJECT_ID != '' }}"
+          echo "FIREBASE_SERVICE_ACCOUNT_BASE64 is set: ${{ env.FIREBASE_SERVICE_ACCOUNT_BASE64 != '' }}"
+          echo "BUILD_ID: $BUILD_ID"
+          
           echo "Uploading artifacts to Firebase Storage..."
           python scripts/upload_to_firebase.py
           
