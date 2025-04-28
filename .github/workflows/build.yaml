@@ -101,40 +101,69 @@ jobs:
             --dart-define=WEBVIEW_URL="$WEBVIEW_URL"
         shell: bash
 
-      # 13.
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
-          retention-days: 7  # Keep artifacts for 7 days
-
-      # 14.
-      - name: Upload AAB Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-aab
-          path: build/app/outputs/bundle/release/app-release.aab
-          retention-days: 7  # Keep artifacts for 7 days
-          
-      # 15. Update Firestore build status (if build_id is provided)
-      - name: Update build status in Firestore
-        if: ${{ github.event.inputs.build_id != '' || github.event.client_payload.build_id != '' }}
+      
+      - name: Upload to Firebase Storage
+        if: success()
         env:
-          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
           FIREBASE_SERVICE_ACCOUNT_BASE64: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
-          BUILD_ID: ${{ github.event.inputs.build_id || github.event.client_payload.build_id }}
         run: |
-          # Save Firebase service account JSON
-          echo "$FIREBASE_SERVICE_ACCOUNT_BASE64" | base64 -d > /tmp/firebase-service-account.json
+          # Decode service account
+          echo "$FIREBASE_SERVICE_ACCOUNT_BASE64" | base64 -d > /tmp/service-account.json
+          chmod 600 /tmp/service-account.json
           
-          # Install Firebase CLI
-          npm install -g firebase-tools
+          # Install gcloud CLI
+          curl -sSL https://sdk.cloud.google.com | bash > /dev/null
+          source ~/bashrc
           
-          # Update Firestore document
-          firebase --project $FIREBASE_PROJECT_ID firestore:update builds/$BUILD_ID --json \
-            '{"status": "completed", "completedAt": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'", "artifactUrls": {"apk": "'$GITHUB_SERVER_URL'/'$GITHUB_REPOSITORY'/actions/runs/'$GITHUB_RUN_ID'", "aab": "'$GITHUB_SERVER_URL'/'$GITHUB_REPOSITORY'/actions/runs/'$GITHUB_RUN_ID'"}}' \
-            --service-account /tmp/firebase-service-account.json
+          # Authenticate
+          gcloud auth activate-service-account --key-file=/tmp/service-account.json
+          gcloud config set project $FIREBASE_PROJECT_ID
           
-          # Clean up
-          rm /tmp/firebase-service-account.json
+          # Upload files
+          BUILD_PATH="builds/$BUILD_ID"
+          APK_URL="https://storage.googleapis.com/$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.apk"
+          AAB_URL="https://storage.googleapis.com/$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.aab"
+          
+          gsutil cp build/app/outputs/flutter-apk/app-release.apk gs://$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.apk
+          gsutil cp build/app/outputs/bundle/release/app-release.aab gs://$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.aab
+          
+          gsutil acl ch -u AllUsers:R gs://$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.apk
+          gsutil acl ch -u AllUsers:R gs://$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.aab
+          
+          # Export URLs for next steps
+          echo "APK_URL=$APK_URL" >> $GITHUB_ENV
+          echo "AAB_URL=$AAB_URL" >> $GITHUB_ENV
+          echo "BUILD_PATH=builds/$BUILD_ID" >> $GITHUB_ENV
+
+      - name: Update Firestore
+        if: ${{ env.BUILD_ID != '' }}
+        env:
+          FIREBASE_SERVICE_ACCOUNT_BASE64: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
+        run: |
+          echo "$FIREBASE_SERVICE_ACCOUNT_BASE64" | base64 -d > /tmp/service-account.json
+          chmod 600 /tmp/service-account.json
+          
+          curl -X PATCH \
+            "https://firestore.googleapis.com/v1/projects/$FIREBASE_PROJECT_ID/databases/(default)/documents/builds/$BUILD_ID" \
+            -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "fields": {
+                "status": {"stringValue": "completed"},
+                "completedAt": {"timestampValue": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"},
+                "apkUrl": {"stringValue": "'$APK_URL'"},
+                "aabUrl": {"stringValue": "'$AAB_URL'"},
+                "buildPath": {"stringValue": "'$BUILD_PATH'"}
+              }
+            }'
+          
+          rm -f /tmp/service-account.json
+
+      - name: Upload Artifacts (Backup)
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-build-${{ env.BUILD_ID }}
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/bundle/release/app-release.aab
+          retention-days: 7
