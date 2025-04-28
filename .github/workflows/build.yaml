@@ -97,10 +97,13 @@ jobs:
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
           BUILD_ID: ${{ env.BUILD_ID }}
           FIREBASE_SERVICE_ACCOUNT_BASE64: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
+          # Set the explicit bucket name as provided
+          FIREBASE_STORAGE_BUCKET: "trader-35173.firebasestorage.app"
         run: |
           # Debug environment variables (masked for security)
           echo "FIREBASE_PROJECT_ID: $FIREBASE_PROJECT_ID"
           echo "FIREBASE_SERVICE_ACCOUNT_BASE64 is set: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 != '' }}"
+          echo "FIREBASE_STORAGE_BUCKET: $FIREBASE_STORAGE_BUCKET"
           echo "BUILD_ID: $BUILD_ID"
           
           echo "Uploading artifacts to Firebase Storage..."

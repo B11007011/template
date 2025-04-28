@@ -14,12 +14,15 @@ def main():
     firebase_project_id = os.environ.get('FIREBASE_PROJECT_ID')
     service_account_base64 = os.environ.get('FIREBASE_SERVICE_ACCOUNT_BASE64')
     build_id = os.environ.get('BUILD_ID')
+    # Optional explicit bucket name
+    firebase_storage_bucket = os.environ.get('FIREBASE_STORAGE_BUCKET')
     
     # Debug output (without revealing sensitive info)
     print(f"FIREBASE_PROJECT_ID: {'SET' if firebase_project_id else 'NOT SET'}")
     if firebase_project_id:
         print(f"Project ID value: {firebase_project_id}")
     print(f"FIREBASE_SERVICE_ACCOUNT_BASE64: {'SET' if service_account_base64 else 'NOT SET'}")
+    print(f"FIREBASE_STORAGE_BUCKET: {'SET' if firebase_storage_bucket else 'NOT SET'}")
     print(f"BUILD_ID: {build_id if build_id else 'NOT SET'}")
     
     # Path to files that need to be uploaded
@@ -54,6 +57,12 @@ def main():
                 else:
                     print("Error: Could not find project_id in service account key")
                     sys.exit(1)
+                    
+                # Print service account email for verification
+                service_account_email = service_account_data.get('client_email')
+                if service_account_email:
+                    print(f"Service account email: {service_account_email}")
+                    print("If uploads fail, verify this account has Storage Admin permission in the Firebase Console")
             except json.JSONDecodeError:
                 print("Error: Invalid service account key JSON format")
                 sys.exit(1)
@@ -87,11 +96,65 @@ def main():
     # Initialize Firebase app
     try:
         cred = credentials.Certificate(temp_key_path)
-        firebase_admin.initialize_app(cred, {
-            'storageBucket': f"{firebase_project_id}.appspot.com"
-        })
         
+        # Try different bucket format approaches
+        try:
+            # If explicit bucket name is provided, use it
+            if firebase_storage_bucket:
+                # Remove gs:// prefix if present
+                if firebase_storage_bucket.startswith('gs://'):
+                    firebase_storage_bucket = firebase_storage_bucket[5:]
+                    
+                firebase_admin.initialize_app(cred, {
+                    'storageBucket': firebase_storage_bucket
+                })
+                print(f"Initialized Firebase app with explicit bucket: {firebase_storage_bucket}")
+            else:
+                # Approach 1: Using the standard project ID based bucket name
+                firebase_admin.initialize_app(cred, {
+                    'storageBucket': f"{firebase_project_id}.appspot.com"
+                })
+                print(f"Initialized Firebase app with bucket: {firebase_project_id}.appspot.com")
+        except Exception as e1:
+            # Cleanup previous failed attempt
+            if firebase_admin._apps:
+                firebase_admin.delete_app(firebase_admin.get_app())
+                
+            try:
+                # Approach 2: Using just the project ID as bucket name
+                firebase_admin.initialize_app(cred, {
+                    'storageBucket': firebase_project_id
+                })
+                print(f"Initialized Firebase app with bucket: {firebase_project_id}")
+            except Exception as e2:
+                # If both approaches fail, try without explicitly setting the bucket
+                print(f"Error initializing with bucket name: {e1}")
+                print(f"Error initializing with project ID as bucket: {e2}")
+                print("Attempting to initialize without explicit bucket...")
+                
+                # Initialize without bucket
+                firebase_admin.initialize_app(cred)
+                
+                # Try to get default bucket
+                try:
+                    from firebase_admin import storage
+                    bucket = storage.bucket()
+                    print(f"Successfully got default bucket: {bucket.name}")
+                except Exception as e3:
+                    print(f"Failed to get default bucket: {e3}")
+                    print("Unable to determine the correct Firebase Storage bucket.")
+                    print("Please verify your Firebase Storage setup in the Firebase Console.")
+                    raise Exception("Failed to initialize Firebase Storage bucket") from e3
+        
+        # If we get here, try to access the bucket
         bucket = storage.bucket()
+        print(f"Successfully connected to bucket: {bucket.name}")
+        
+        # Test bucket existence/permissions with a small operation
+        test_blob = bucket.blob('test-connection.txt')
+        test_blob.upload_from_string('Test connection', content_type='text/plain')
+        test_blob.delete()
+        print("Successfully verified bucket permissions with test operation")
         
         # Upload APK
         if os.path.exists(apk_path):
@@ -137,6 +200,22 @@ def main():
         
     except Exception as e:
         print(f"Error during Firebase upload: {e}")
+        # Provide more helpful info for common errors
+        if "The specified bucket does not exist" in str(e):
+            print("\n===== FIREBASE STORAGE SETUP HELP =====")
+            print("It looks like your Firebase Storage might not be set up correctly.")
+            print("Please follow these steps:")
+            print("1. Go to https://console.firebase.google.com/project/" + firebase_project_id + "/storage")
+            print("2. Click 'Get Started' if you haven't set up Storage yet")
+            print("3. Choose a location and click 'Next'")
+            print("4. Select 'Start in production mode' or 'Start in test mode'")
+            print("5. Click 'Done' to create your Storage bucket")
+            print("\nAlso verify that your service account has the 'Storage Admin' role:")
+            print("1. Go to https://console.cloud.google.com/iam-admin/iam?project=" + firebase_project_id)
+            print("2. Find your service account in the list")
+            print("3. Add the 'Storage Admin' role if it's not already assigned")
+            print("=====================================\n")
+        
         # Clean up in case of error
         if os.path.exists(temp_key_path):
             os.remove(temp_key_path)
