@@ -78,11 +78,40 @@ jobs:
             --dart-define=APP_NAME="$APP_NAME" \
             --dart-define=WEBVIEW_URL="$WEBVIEW_URL"
 
+      - name: Process Firebase Service Account
+        env:
+          FIREBASE_SERVICE_ACCOUNT_BASE64: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
+        run: |
+          # Create a temporary directory for service account
+          mkdir -p /tmp/firebase
+          
+          # Write the multi-line base64 to a file
+          echo "$FIREBASE_SERVICE_ACCOUNT_BASE64" > /tmp/firebase/service-account-base64.txt
+          
+          # Process each line and combine into a single JSON file
+          cat /tmp/firebase/service-account-base64.txt | while read line; do
+            echo $line | base64 -d >> /tmp/firebase/service-account-part.txt
+          done
+          
+          # Fix any formatting issues in the JSON
+          cat /tmp/firebase/service-account-part.txt | tr -d '\r' > /tmp/firebase/service-account.json
+          
+          # Make the file readable only by the current user
+          chmod 600 /tmp/firebase/service-account.json
+          
+          # Verify it's valid JSON
+          if ! jq . /tmp/firebase/service-account.json > /dev/null 2>&1; then
+            echo "Error: Service account is not valid JSON"
+            exit 1
+          fi
+          
+          echo "Service account JSON file created successfully at /tmp/firebase/service-account.json"
+
       - name: Set up Google Cloud SDK
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
-          
+          service_account_key_file: /tmp/firebase/service-account.json
+
       - name: Set up gcloud CLI
         uses: google-github-actions/setup-gcloud@v2
         with:
