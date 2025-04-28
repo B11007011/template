@@ -78,45 +78,17 @@ jobs:
             --dart-define=APP_NAME="$APP_NAME" \
             --dart-define=WEBVIEW_URL="$WEBVIEW_URL"
 
-      - name: Process Firebase Service Account
+      # Install Firebase CLI
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      # Authenticate with Firebase using the FIREBASE_TOKEN secret
+      - name: Authenticate with Firebase
         env:
-          FIREBASE_SERVICE_ACCOUNT_BASE64: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
-        run: |
-          # Create a temporary directory for service account
-          mkdir -p /tmp/firebase
-          
-          # Write the multi-line base64 to a file
-          echo "$FIREBASE_SERVICE_ACCOUNT_BASE64" > /tmp/firebase/service-account-base64.txt
-          
-          # Process each line and combine into a single JSON file
-          cat /tmp/firebase/service-account-base64.txt | while read line; do
-            echo $line | base64 -d >> /tmp/firebase/service-account-part.txt
-          done
-          
-          # Fix any formatting issues in the JSON
-          cat /tmp/firebase/service-account-part.txt | tr -d '\r' > /tmp/firebase/service-account.json
-          
-          # Make the file readable only by the current user
-          chmod 600 /tmp/firebase/service-account.json
-          
-          # Verify it's valid JSON
-          if ! jq . /tmp/firebase/service-account.json > /dev/null 2>&1; then
-            echo "Error: Service account is not valid JSON"
-            exit 1
-          fi
-          
-          echo "Service account JSON file created successfully at /tmp/firebase/service-account.json"
-
-      - name: Set up Google Cloud SDK
-        uses: google-github-actions/auth@v2
-        with:
-          service_account_key_file: /tmp/firebase/service-account.json
-
-      - name: Set up gcloud CLI
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: ${{ secrets.FIREBASE_PROJECT_ID }}
-
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: firebase use --add ${{ secrets.FIREBASE_PROJECT_ID }}
+        
+      # Upload APK and AAB to Firebase Storage
       - name: Upload to Firebase Storage
         if: success()
         run: |
@@ -124,40 +96,30 @@ jobs:
           BUILD_PATH="builds/$BUILD_ID"
           echo "Uploading artifacts to $BUILD_PATH..."
           
-          # Upload files
-          gsutil cp build/app/outputs/flutter-apk/app-release.apk gs://$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.apk
-          gsutil cp build/app/outputs/bundle/release/app-release.aab gs://$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.aab
+          # Use Firebase Storage syntax to upload files
+          firebase storage:upload build/app/outputs/flutter-apk/app-release.apk gs://$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.apk
+          firebase storage:upload build/app/outputs/bundle/release/app-release.aab gs://$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.aab
           
-          # Set public access
-          gsutil acl ch -u AllUsers:R gs://$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.apk
-          gsutil acl ch -u AllUsers:R gs://$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.aab
-          
-          # Export URLs for next steps
+          # Set public URLs
           echo "APK_URL=https://storage.googleapis.com/$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.apk" >> $GITHUB_ENV
           echo "AAB_URL=https://storage.googleapis.com/$FIREBASE_PROJECT_ID.appspot.com/$BUILD_PATH/app.aab" >> $GITHUB_ENV
           echo "BUILD_PATH=$BUILD_PATH" >> $GITHUB_ENV
-
+      
+      # Update Firestore with build information
       - name: Update Firestore
         if: ${{ github.event.inputs.build_id != '' || github.event.client_payload.build_id != '' }}
         run: |
-          # Get access token (already authenticated by the auth action)
-          ACCESS_TOKEN=$(gcloud auth print-access-token)
-          
           echo "Updating Firestore document for build $BUILD_ID..."
-          curl -X PATCH \
-            "https://firestore.googleapis.com/v1/projects/$FIREBASE_PROJECT_ID/databases/(default)/documents/builds/$BUILD_ID" \
-            -H "Authorization: Bearer $ACCESS_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "fields": {
-                "status": {"stringValue": "completed"},
-                "completedAt": {"timestampValue": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"},
-                "apkUrl": {"stringValue": "'$APK_URL'"},
-                "aabUrl": {"stringValue": "'$AAB_URL'"},
-                "buildPath": {"stringValue": "'$BUILD_PATH'"}
-              }
-            }'
+          
+          firebase firestore:set builds/$BUILD_ID --data '{
+            "status": "completed",
+            "completedAt": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'",
+            "apkUrl": "'$APK_URL'",
+            "aabUrl": "'$AAB_URL'",
+            "buildPath": "'$BUILD_PATH'"
+          }'
 
+      # Upload artifacts to GitHub Actions for backup
       - name: Upload Artifacts (Backup)
         uses: actions/upload-artifact@v4
         with:
