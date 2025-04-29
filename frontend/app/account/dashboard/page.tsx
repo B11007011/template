@@ -23,13 +23,13 @@ export default function DashboardPage() {
   }, [user, loading, router, isConfigured]);
 
   if (loading) {
-    return (
+  return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#8c52ff] mx-auto"></div>
           <p className="mt-4">Loading...</p>
         </div>
-      </div>
+                </div>
     );
   }
 
@@ -64,16 +64,16 @@ export default function DashboardPage() {
                 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id<br />
                 NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
               </p>
-            </div>
+                      </div>
             <Button 
               className="w-full bg-[#8c52ff] hover:bg-[#7a45e0]"
               onClick={() => router.push("/")}
             >
               Go to Home Page
             </Button>
-          </div>
-        </div>
-      </div>
+                    </div>
+                  </div>
+                </div>
     );
   }
 
@@ -89,7 +89,7 @@ export default function DashboardPage() {
         <div className="md:col-span-1">
           <UserProfile />
         </div>
-        
+
         <div className="md:col-span-2">
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-2xl font-semibold mb-4">Your Apps</h2>
@@ -103,7 +103,7 @@ export default function DashboardPage() {
               <button className="bg-[#8c52ff] hover:bg-[#7a45e0] text-white font-medium py-2 px-6 rounded-md">
                 Create App
               </button>
-            </div>
+              </div>
             
             <div className="mt-6">
               <h3 className="text-lg font-semibold mb-2">Recent Activity</h3>
@@ -116,9 +116,9 @@ export default function DashboardPage() {
                   <span>Logged in with {user.providerData[0]?.providerId === "google.com" ? "Google" : "Email"}</span>
                   <span className="text-gray-500">{new Date().toLocaleDateString()}</span>
                 </div>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>
