@@ -13,6 +13,29 @@ const https = require('https');
 const triggerWorkflow = async (options) => {
   const { owner, repo, token, eventType, clientPayload } = options;
   
+  // Validate required parameters
+  if (!owner || !repo || !token) {
+    console.error('Missing required GitHub configuration:');
+    console.error('- owner:', owner ? 'provided' : 'missing');
+    console.error('- repo:', repo ? 'provided' : 'missing');
+    console.error('- token:', token ? 'provided (masked)' : 'missing');
+    throw new Error('Missing required GitHub configuration');
+  }
+
+  // Validate the client payload contains required app build information
+  if (!clientPayload.build_id || !clientPayload.app_name || !clientPayload.url) {
+    console.error('Missing required build information in clientPayload:', clientPayload);
+    throw new Error('Missing required build information in clientPayload');
+  }
+
+  // Log the workflow trigger (with masked sensitive data)
+  console.log(`Triggering GitHub workflow with event type: ${eventType}`);
+  console.log('Build payload:', {
+    build_id: clientPayload.build_id,
+    app_name: clientPayload.app_name,
+    url: clientPayload.url
+  });
+  
   return new Promise((resolve, reject) => {
     const data = JSON.stringify({
       event_type: eventType,
@@ -28,6 +51,8 @@ const triggerWorkflow = async (options) => {
         'Content-Type': 'application/json',
         'Authorization': `token ${token}`,
         'User-Agent': 'Node.js',
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
         'Content-Length': data.length
       }
     };
@@ -40,12 +65,16 @@ const triggerWorkflow = async (options) => {
       });
       
       res.on('end', () => {
-        if (res.statusCode >= 200 && res.statusCode < 300) {
+        // For repository_dispatch, GitHub returns 204 No Content when successful
+        if (res.statusCode === 204 || (res.statusCode >= 200 && res.statusCode < 300)) {
+          console.log(`GitHub API workflow trigger successful (${res.statusCode})`);
           resolve({
             statusCode: res.statusCode,
-            data: responseData ? JSON.parse(responseData) : {}
+            data: responseData ? JSON.parse(responseData) : { status: 'success' }
           });
         } else {
+          console.error(`GitHub API error: ${res.statusCode}`);
+          console.error('Response:', responseData);
           reject({
             statusCode: res.statusCode,
             message: `GitHub API responded with status code ${res.statusCode}`,

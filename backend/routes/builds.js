@@ -167,15 +167,33 @@ router.post('/trigger', async (req, res) => {
       });
     }
     
+    // Validate and sanitize the URL
+    let validUrl = webviewUrl;
+    try {
+      // Add protocol if missing
+      if (!validUrl.startsWith('http://') && !validUrl.startsWith('https://')) {
+        validUrl = 'https://' + validUrl;
+      }
+      // Check if it's a valid URL
+      new URL(validUrl); // This will throw if invalid
+    } catch (e) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid URL provided. Please enter a valid website URL.'
+      });
+    }
+    
+    // Create a new build document
+    const buildId = Date.now().toString();
+    
     // Use mock data if enabled
     if (useMockData()) {
-      const buildId = Date.now().toString();
       const newBuild = {
         id: buildId,
         status: 'pending',
         createdAt: new Date().toISOString(),
         appName,
-        webviewUrl
+        webviewUrl: validUrl
       };
       
       // Add to mock data
@@ -191,13 +209,12 @@ router.post('/trigger', async (req, res) => {
       });
     }
     
-    // Create a new build document
-    const buildId = Date.now().toString();
+    // Create a Firestore document for the build
     await buildsCollection.doc(buildId).set({
       status: 'pending',
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       appName,
-      webviewUrl,
+      webviewUrl: validUrl,
       buildId
     });
     
@@ -218,7 +235,7 @@ router.post('/trigger', async (req, res) => {
         clientPayload: {
           build_id: buildId,
           app_name: appName,
-          url: webviewUrl
+          url: validUrl
         }
       });
       
@@ -230,12 +247,14 @@ router.post('/trigger', async (req, res) => {
       // Update build status to failed
       await buildsCollection.doc(buildId).update({
         status: 'failed',
-        error: 'Failed to trigger build workflow'
+        error: 'Failed to trigger build workflow',
+        errorDetails: githubError.message
       });
       
       return res.status(500).json({
         success: false,
-        error: 'Failed to trigger build workflow'
+        error: 'Failed to trigger build workflow',
+        message: githubError.message
       });
     }
     

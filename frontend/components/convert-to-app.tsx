@@ -2,20 +2,21 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowRight, Globe } from "lucide-react"
+import { ArrowRight, Globe, Type } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { toast } from "@/components/ui/use-toast"
-
-// API base URL
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
+import api from "@/lib/api"
 
 export default function ConvertToApp() {
   const [websiteUrl, setWebsiteUrl] = useState("")
+  const [appName, setAppName] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
 
   const handleConvertToApp = async () => {
-    // Validate the URL
+    // Form validation
     if (!websiteUrl) {
       toast({
         title: "Please enter a website URL",
@@ -25,48 +26,34 @@ export default function ConvertToApp() {
       return
     }
 
-    // Add protocol if missing
-    let url = websiteUrl
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      url = 'https://' + url
-    }
-
+    // Use either provided app name or generate from URL
+    const finalAppName = appName || getAppNameFromUrl(websiteUrl)
+    
     // Show loading state
     setIsLoading(true)
 
     try {
       // Make API call to trigger build
-      console.log('Calling API at:', `${API_URL}/builds/trigger`)
-      const response = await fetch(`${API_URL}/builds/trigger`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          appName: getAppNameFromUrl(url),
-          webviewUrl: url
-        })
+      const response = await api.builds.createBuild({
+        appName: finalAppName,
+        webviewUrl: websiteUrl
       })
+      
+      console.log('Build triggered successfully:', response)
 
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('API responded with error:', response.status, errorText)
-        throw new Error(`Error ${response.status}: ${errorText || 'Unknown error'}`)
-      }
-
-      const data = await response.json()
-      console.log('Build triggered successfully:', data)
-
-      // Show success message
+      // Show success message with build ID
       toast({
         title: "Build Started",
-        description: "Your app build has been started successfully. You'll be redirected to the builds page.",
+        description: `Your app build has been started successfully.`,
       })
 
-      // Redirect to builds page
-      setTimeout(() => {
+      // Redirect to build success page with the build ID
+      if (response && response.data && response.data.id) {
+        router.push(`/dashboard/build-success?id=${response.data.id}`)
+      } else {
+        // Fallback to builds page if we don't have a build ID
         router.push('/dashboard/build-download')
-      }, 1500)
+      }
     } catch (error) {
       console.error('Error triggering build:', error)
       toast({
@@ -82,29 +69,64 @@ export default function ConvertToApp() {
   // Helper function to get an app name from the URL
   const getAppNameFromUrl = (url: string): string => {
     try {
-      const urlObj = new URL(url)
-      return urlObj.hostname.replace('www.', '')
+      // Add protocol if missing for URL parsing
+      let urlStr = url
+      if (!urlStr.startsWith('http://') && !urlStr.startsWith('https://')) {
+        urlStr = 'https://' + urlStr
+      }
+      
+      const urlObj = new URL(urlStr)
+      // Extract domain without www and TLD
+      const domain = urlObj.hostname.replace('www.', '')
+      // Capitalize first letter of each part
+      return domain.split('.')[0]
+        .split('-')
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ')
     } catch (e) {
-      // If URL parsing fails, just return the input as is
-      return url.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0]
+      // If URL parsing fails, just return a default name
+      return "My App"
     }
   }
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-center gap-4 max-w-md mx-auto">
-      <div className="relative w-full">
-        <Globe className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <input
-          className="flex h-10 rounded-md border border-input bg-background px-3 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 pl-10 pr-20 py-6 w-full"
-          placeholder="Enter your Website Address"
-          type="text"
-          value={websiteUrl}
-          onChange={(e) => setWebsiteUrl(e.target.value)}
-          disabled={isLoading}
-        />
+    <div className="flex flex-col gap-4 max-w-md mx-auto">
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="website-url">Website URL</Label>
+        <div className="relative">
+          <Globe className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            id="website-url"
+            className="pl-10"
+            placeholder="https://example.com"
+            type="url"
+            value={websiteUrl}
+            onChange={(e) => setWebsiteUrl(e.target.value)}
+            disabled={isLoading}
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">Enter the full URL of the website you want to convert</p>
       </div>
+      
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="app-name">App Name (Optional)</Label>
+        <div className="relative">
+          <Type className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            id="app-name"
+            className="pl-10"
+            placeholder="My Website App"
+            type="text"
+            value={appName}
+            onChange={(e) => setAppName(e.target.value)}
+            disabled={isLoading}
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">Leave blank to auto-generate from URL</p>
+      </div>
+      
       <Button 
-        className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 text-primary-foreground h-10 px-4 py-2 bg-[#8c52ff] hover:bg-[#7a45e0] w-full sm:w-auto"
+        className="w-full mt-2 bg-[#8c52ff] hover:bg-[#7a45e0]"
         onClick={handleConvertToApp}
         disabled={isLoading}
       >
