@@ -117,7 +117,7 @@ export default function BuildStatusIndicator({
   
   // Navigate to build download page
   const goToBuildDetails = () => {
-    router.push(`/dashboard/build-download?highlight=${buildId}`);
+    router.push(`/account/dashboard/build-download?highlight=${buildId}`);
   };
   
   return (

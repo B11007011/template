@@ -5,33 +5,13 @@ import { ArrowRight, Globe } from "lucide-react"
 import FeatureCard from "@/components/feature-card"
 import { features } from "@/lib/data"
 import ConvertToApp from "@/components/convert-to-app"
-import AuthLinks from "@/components/AuthLinks"
+import Header from "@/components/Header"
 
 export default function Home() {
   return (
     <div className="min-h-screen bg-white">
-      <header className="bg-white border-b py-4 px-4 md:px-6">
-        <div className="container mx-auto flex items-center justify-between">
-          <div className="flex items-center">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="text-2xl font-bold text-[#8c52ff]">Tecxmate</span>
-            </Link>
-          </div>
-          <div className="flex items-center gap-4">
-            <AuthLinks>
-              <Link href="/account/dashboard" className="text-sm text-gray-600 hover:text-gray-900">
-                Dashboard
-              </Link>
-              <Link 
-                href="/account/dashboard" 
-                className="inline-flex h-9 items-center justify-center rounded-md bg-[#8c52ff] px-4 py-2 text-sm font-medium text-white shadow transition-colors hover:bg-[#7a45e0] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
-              >
-                Get Started
-              </Link>
-            </AuthLinks>
-          </div>
-        </div>
-      </header>
+      <Header />
+      
       <main className="flex-1">
         <section className="py-16 px-4 md:py-24">
           <div className="container mx-auto text-center">
