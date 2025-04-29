@@ -36,6 +36,7 @@ export default function ConvertToApp() {
 
     try {
       // Make API call to trigger build
+      console.log('Calling API at:', `${API_URL}/builds/trigger`)
       const response = await fetch(`${API_URL}/builds/trigger`, {
         method: 'POST',
         headers: {
@@ -48,10 +49,13 @@ export default function ConvertToApp() {
       })
 
       if (!response.ok) {
-        throw new Error(`Error: ${response.status}`)
+        const errorText = await response.text()
+        console.error('API responded with error:', response.status, errorText)
+        throw new Error(`Error ${response.status}: ${errorText || 'Unknown error'}`)
       }
 
       const data = await response.json()
+      console.log('Build triggered successfully:', data)
 
       // Show success message
       toast({
@@ -67,7 +71,7 @@ export default function ConvertToApp() {
       console.error('Error triggering build:', error)
       toast({
         title: "Error",
-        description: "There was an error starting your app build. Please try again.",
+        description: error instanceof Error ? error.message : "There was an error starting your app build. Please try again.",
         variant: "destructive"
       })
     } finally {

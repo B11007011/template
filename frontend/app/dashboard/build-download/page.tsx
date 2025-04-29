@@ -10,9 +10,8 @@ import { toast } from "@/components/ui/use-toast"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { format } from "date-fns"
-
-// API base URL
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+import ApiDebug from "@/components/api-debug"
+import api from "@/lib/api"
 
 // Types
 interface Build {
@@ -29,106 +28,140 @@ interface Build {
 }
 
 export default function BuildDownloadPage() {
-  const [builds, setBuilds] = useState<Build[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState<string | null>(null);
+  const [builds, setBuilds] = useState<Build[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [triggeringBuild, setTriggeringBuild] = useState(false)
+  const [deleting, setDeleting] = useState<string | null>(null)
 
-  // Fetch builds
+  // Fetch builds on component mount
+  useEffect(() => {
+    fetchBuilds()
+  }, [])
+
+  // Fetch all builds from the API
   const fetchBuilds = async () => {
+    setLoading(true)
     try {
-      setLoading(true);
-      setError(null);
+      const response = await api.builds.getAll()
+      console.log('API Response:', response) // Debug log
       
-      const response = await fetch(`${API_URL}/builds`);
-      
-      if (!response.ok) {
-        throw new Error(`Error fetching builds: ${response.status}`);
+      // Extract the builds array from the response
+      if (response && response.data && Array.isArray(response.data)) {
+        setBuilds(response.data)
+      } else {
+        console.error('Invalid API response format:', response)
+        setBuilds([]) // Set to empty array to avoid mapping errors
+        setError('Received invalid data format from the API.')
       }
-      
-      const data = await response.json();
-      setBuilds(data.data || []);
+      setError(null)
     } catch (err) {
-      console.error('Error fetching builds:', err);
-      setError('Failed to load builds. Please try again later.');
+      console.error('Error fetching builds:', err)
+      setBuilds([]) // Set to empty array to avoid mapping errors
+      setError('Failed to load builds. Please try again.')
+      toast({
+        title: "Error",
+        description: "Failed to load builds",
+        variant: "destructive",
+      })
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   // Delete a build
   const deleteBuild = async (buildId: string) => {
+    if (!confirm('Are you sure you want to delete this build?')) {
+      return
+    }
+
+    setDeleting(buildId)
     try {
-      setDeleting(buildId);
-      
-      const response = await fetch(`${API_URL}/builds/${buildId}`, {
-        method: 'DELETE'
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Error deleting build: ${response.status}`);
-      }
-      
+      await api.builds.deleteBuild(buildId)
+      // Remove the build from state
+      setBuilds((prevBuilds) => 
+        prevBuilds.filter(build => build.id !== buildId)
+      )
       toast({
-        title: "Build deleted",
-        description: "The build has been successfully deleted."
-      });
-      
-      // Remove from state
-      setBuilds(builds.filter(build => build.id !== buildId));
+        title: "Success",
+        description: "Build deleted successfully",
+      })
     } catch (err) {
-      console.error('Error deleting build:', err);
+      console.error('Error deleting build:', err)
       toast({
         title: "Error",
-        description: "Failed to delete build. Please try again.",
-        variant: "destructive"
-      });
+        description: "Failed to delete build",
+        variant: "destructive",
+      })
     } finally {
-      setDeleting(null);
+      setDeleting(null)
     }
-  };
+  }
 
   // Trigger a new build
   const triggerBuild = async () => {
+    setTriggeringBuild(true)
     try {
-      const response = await fetch(`${API_URL}/builds/trigger`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          appName: 'My Website',
-          webviewUrl: 'https://example.com'
-        })
-      });
+      const response = await api.builds.createBuild({ 
+        appName: 'My Website',
+        webviewUrl: 'https://example.com'
+      })
       
-      if (!response.ok) {
-        throw new Error(`Error triggering build: ${response.status}`);
-      }
-      
-      const data = await response.json();
+      // Log the response to help with debugging
+      console.log('Build trigger response:', response)
       
       toast({
-        title: "Build triggered",
-        description: "New build has been triggered successfully."
-      });
-      
-      // Refresh builds
-      fetchBuilds();
+        title: "Success",
+        description: "Build triggered successfully",
+      })
+      // Refresh the builds list
+      fetchBuilds()
     } catch (err) {
-      console.error('Error triggering build:', err);
+      console.error('Error triggering build:', err)
       toast({
         title: "Error",
-        description: "Failed to trigger build. Please try again.",
-        variant: "destructive"
-      });
+        description: "Failed to trigger build",
+        variant: "destructive",
+      })
+    } finally {
+      setTriggeringBuild(false)
     }
-  };
+  }
 
-  // Initial fetch
-  useEffect(() => {
-    fetchBuilds();
-  }, []);
+  // Download a build
+  const downloadBuild = async (buildId: string) => {
+    try {
+      const response = await api.builds.downloadBuild(buildId)
+      
+      // Create a blob from the response
+      const blob = await response.blob()
+      
+      // Create a link element and trigger the download
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.style.display = 'none'
+      a.href = url
+      a.download = `build-${buildId}.zip`
+      document.body.appendChild(a)
+      a.click()
+      
+      // Clean up
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      
+      toast({
+        title: "Success",
+        description: "Download started",
+      })
+    } catch (err) {
+      console.error('Error downloading build:', err)
+      toast({
+        title: "Error",
+        description: "Failed to download build",
+        variant: "destructive",
+      })
+    }
+  }
 
   return (
     <div className="container mx-auto py-8">
@@ -185,7 +218,13 @@ export default function BuildDownloadPage() {
               <AlertCircle className="h-10 w-10 text-red-500 mb-4" />
               <h3 className="text-lg font-medium mb-2">Failed to Load Builds</h3>
               <p className="text-gray-500 mb-4">{error}</p>
-              <Button onClick={fetchBuilds}>Try Again</Button>
+              <Button onClick={fetchBuilds} className="mb-6">Try Again</Button>
+              
+              {/* API Debug Component */}
+              <div className="w-full mt-8 border-t pt-6">
+                <h4 className="text-left text-lg font-medium mb-4">API Connection Troubleshooting</h4>
+                <ApiDebug />
+              </div>
             </div>
           </CardContent>
         </Card>

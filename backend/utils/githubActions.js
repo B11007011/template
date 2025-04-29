@@ -56,6 +56,21 @@ const triggerWorkflow = async (options) => {
     });
     
     req.on('error', (error) => {
+      console.error('GitHub API Request Error:', error);
+      console.error('Request details:', {
+        url: `https://api.github.com/repos/${owner}/${repo}/dispatches`,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `token ****${token?.slice(-4) || ''}`,
+          'User-Agent': 'Node.js'
+        },
+        payload: JSON.stringify({
+          event_type: eventType,
+          client_payload: clientPayload
+        })
+      });
+      
       reject({
         message: 'Error making request to GitHub API',
         error
