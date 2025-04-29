@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import Link from "next/link"
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
@@ -12,13 +11,15 @@ import { toast } from "sonner"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
 
-export default function LoginPage() {
+export default function SignupPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [passwordError, setPasswordError] = useState("")
   const router = useRouter()
   const searchParams = useSearchParams()
   const redirectPath = searchParams?.get('redirect') || '/account/dashboard'
-  const { user, signIn, signInWithGoogle, error, loading, isConfigured } = useAuth()
+  const { user, signUp, signInWithGoogle, error, loading, isConfigured } = useAuth()
 
   useEffect(() => {
     // Redirect if user is already logged in
@@ -34,9 +35,23 @@ export default function LoginPage() {
     }
   }, [error])
 
+  const validatePasswords = () => {
+    if (password !== confirmPassword) {
+      setPasswordError("Passwords do not match")
+      return false
+    }
+    if (password.length < 6) {
+      setPasswordError("Password must be at least 6 characters")
+      return false
+    }
+    setPasswordError("")
+    return true
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    await signIn(email, password)
+    if (!validatePasswords()) return
+    await signUp(email, password)
   }
 
   const handleGoogleSignIn = async () => {
@@ -60,12 +75,12 @@ export default function LoginPage() {
       <div className="hidden md:flex md:w-1/2 bg-[#f5f2ff] flex-col justify-center items-center p-8 relative">
         <div className="max-w-md mx-auto text-center">
           <h2 className="text-2xl md:text-3xl font-bold text-gray-700 mb-6">
-            Tecxmate turned our website into a sleek app effortlessly - fast, simple, and amazing! Truly a game-changer!
+            Join thousands of users who have transformed their websites into mobile apps with Tecxmate!
           </h2>
           <div className="flex flex-col items-center mt-8">
             <div className="w-16 h-16 rounded-full bg-gray-300 mb-3"></div>
-            <p className="font-medium">Sarah Johnson</p>
-            <p className="text-sm text-gray-500">Marketing Director, TechCorp</p>
+            <p className="font-medium">Michael Chen</p>
+            <p className="text-sm text-gray-500">Founder, StartupXYZ</p>
             <div className="flex mt-2">
               {[...Array(5)].map((_, i) => (
                 <svg
@@ -84,11 +99,11 @@ export default function LoginPage() {
         <div className="absolute bottom-4 left-4 text-sm text-gray-500">© 2023 Tecxmate. All Rights Reserved</div>
       </div>
 
-      {/* Login Form */}
+      {/* Signup Form */}
       <div className="w-full md:w-1/2 flex items-center justify-center p-8">
         <div className="w-full max-w-md">
-          <h1 className="text-2xl font-bold text-center mb-2">Welcome back</h1>
-          <p className="text-center text-gray-600 mb-8">Hey there, please enter your details.</p>
+          <h1 className="text-2xl font-bold text-center mb-2">Create an account</h1>
+          <p className="text-center text-gray-600 mb-8">Sign up to get started with Tecxmate</p>
 
           {!isConfigured && (
             <Alert variant="destructive" className="mb-6">
@@ -106,7 +121,7 @@ export default function LoginPage() {
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Authentication Required</AlertTitle>
               <AlertDescription>
-                You need to sign in to access this page.
+                You need to create an account to access this page.
               </AlertDescription>
             </Alert>
           )}
@@ -137,15 +152,26 @@ export default function LoginPage() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
+                  placeholder="Create a password"
                   required
                   disabled={!isConfigured}
                 />
-                <div className="flex justify-end mt-1">
-                  <Link href="/account/forgot-password" className="text-sm text-[#8c52ff] hover:underline">
-                    Forgot password?
-                  </Link>
-                </div>
+              </div>
+
+              <div>
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                  Confirm Password
+                </label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Confirm your password"
+                  required
+                  disabled={!isConfigured}
+                />
+                {passwordError && <p className="text-red-500 text-sm mt-1">{passwordError}</p>}
               </div>
 
               <Button 
@@ -153,8 +179,14 @@ export default function LoginPage() {
                 className="w-full bg-[#8c52ff] hover:bg-[#7a45e0]"
                 disabled={!isConfigured}
               >
-                Sign in
+                Sign up
               </Button>
+
+              <div className="relative flex items-center justify-center">
+                <div className="border-t border-gray-300 flex-grow"></div>
+                <span className="mx-4 text-sm text-gray-500">or</span>
+                <div className="border-t border-gray-300 flex-grow"></div>
+              </div>
 
               <Button 
                 variant="outline" 
@@ -181,19 +213,19 @@ export default function LoginPage() {
                     fill="#EA4335"
                   />
                 </svg>
-                Sign in with Google
+                Sign up with Google
               </Button>
             </div>
           </form>
 
           <p className="text-center mt-8 text-sm text-gray-600">
-            Don't have an account?{" "}
-            <Link href="/account/signup" className="text-[#8c52ff] hover:underline font-medium">
-              Sign up
+            Already have an account?{" "}
+            <Link href={`/account/login${redirectPath !== '/account/dashboard' ? `?redirect=${encodeURIComponent(redirectPath)}` : ''}`} className="text-[#8c52ff] hover:underline font-medium">
+              Sign in
             </Link>
           </p>
         </div>
       </div>
     </div>
   )
-}
+} 

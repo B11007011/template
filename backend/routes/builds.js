@@ -40,41 +40,13 @@ const mockBuilds = [
 
 // Helper to determine if we should use mock data
 const useMockData = () => {
-  // Always use mock data if explicitly enabled in .env
-  const mockEnabled = process.env.USE_MOCK_DATA === 'true';
-  
-  // Check if Firebase is initialized properly
-  let firebaseInitialized = true;
-  try {
-    // Try to access Firestore - this will throw if Firebase isn't initialized
-    const testDoc = db.collection('_test_').doc('_test_');
-    
-    // If we've explicitly enabled mock data, log it
-    if (mockEnabled) {
-      console.log('Using mock data instead of Firebase (explicitly enabled)');
-    }
-  } catch (error) {
-    // Firebase isn't initialized or has an error
-    firebaseInitialized = false;
-    console.log('Firebase appears to be unavailable, falling back to mock data:', error.message);
-  }
-  
-  // Use mock data if explicitly enabled OR if Firebase is not working
-  return mockEnabled || !firebaseInitialized;
+  // Always use real data regardless of environment settings
+  return false;
 };
 
 // Get all builds
 router.get('/', async (req, res) => {
   try {
-    // Use mock data if enabled
-    if (useMockData()) {
-      return res.json({
-        success: true,
-        count: mockBuilds.length,
-        data: mockBuilds
-      });
-    }
-
     console.log('Attempting to query Firestore collection: builds');
     console.log('Firestore instance:', db._settings);
     
@@ -115,21 +87,6 @@ router.get('/', async (req, res) => {
 // Get a specific build by ID
 router.get('/:id', async (req, res) => {
   try {
-    // Use mock data if enabled
-    if (useMockData()) {
-      const build = mockBuilds.find(b => b.id === req.params.id);
-      if (!build) {
-        return res.status(404).json({
-          success: false,
-          error: 'Build not found'
-        });
-      }
-      return res.json({
-        success: true,
-        data: build
-      });
-    }
-
     const doc = await buildsCollection.doc(req.params.id).get();
     
     if (!doc.exists) {
@@ -185,29 +142,6 @@ router.post('/trigger', async (req, res) => {
     
     // Create a new build document
     const buildId = Date.now().toString();
-    
-    // Use mock data if enabled
-    if (useMockData()) {
-      const newBuild = {
-        id: buildId,
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-        appName,
-        webviewUrl: validUrl
-      };
-      
-      // Add to mock data
-      mockBuilds.unshift(newBuild);
-      
-      return res.status(201).json({
-        success: true,
-        data: {
-          id: buildId,
-          status: 'pending',
-          message: 'Build triggered successfully'
-        }
-      });
-    }
     
     // Create a Firestore document for the build
     await buildsCollection.doc(buildId).set({
@@ -280,26 +214,6 @@ router.delete('/:id', async (req, res) => {
   try {
     const buildId = req.params.id;
     
-    // Use mock data if enabled
-    if (useMockData()) {
-      const buildIndex = mockBuilds.findIndex(b => b.id === buildId);
-      if (buildIndex === -1) {
-        return res.status(404).json({
-          success: false,
-          error: 'Build not found'
-        });
-      }
-      
-      // Remove from mock data
-      mockBuilds.splice(buildIndex, 1);
-      
-      return res.json({
-        success: true,
-        data: {},
-        message: 'Build deleted successfully'
-      });
-    }
-    
     const doc = await buildsCollection.doc(buildId).get();
     
     if (!doc.exists) {
@@ -332,6 +246,93 @@ router.delete('/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('Error deleting build:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server Error'
+    });
+  }
+});
+
+// Download a build
+router.get('/:id/download', async (req, res) => {
+  try {
+    const buildId = req.params.id;
+    
+    // Get build data from Firestore
+    const doc = await buildsCollection.doc(buildId).get();
+    
+    if (!doc.exists) {
+      return res.status(404).json({
+        success: false,
+        error: 'Build not found'
+      });
+    }
+    
+    const buildData = doc.data();
+    
+    // Check if build is completed
+    if (buildData.status !== 'completed') {
+      return res.status(400).json({
+        success: false,
+        error: 'Build is not completed yet'
+      });
+    }
+    
+    // Check if buildPath exists
+    if (!buildData.buildPath) {
+      return res.status(400).json({
+        success: false,
+        error: 'Build files not found'
+      });
+    }
+    
+    try {
+      // Build the path to the ZIP file in Firebase Storage
+      const zipFilePath = `${buildData.buildPath}build.zip`;
+      
+      // Get file reference
+      const file = bucket.file(zipFilePath);
+      
+      // Check if file exists
+      const [exists] = await file.exists();
+      if (!exists) {
+        return res.status(404).json({
+          success: false,
+          error: 'Build file not found in storage'
+        });
+      }
+      
+      // Set headers for downloading the file
+      res.setHeader('Content-Disposition', `attachment; filename="build-${buildId}.zip"`);
+      res.setHeader('Content-Type', 'application/zip');
+      
+      // Create a read stream and pipe it to the response
+      const readStream = file.createReadStream();
+      readStream.pipe(res);
+      
+      // Handle potential errors during streaming
+      readStream.on('error', (err) => {
+        console.error('Error streaming file:', err);
+        // Only send error if headers haven't been sent yet
+        if (!res.headersSent) {
+          res.status(500).json({
+            success: false,
+            error: 'Error streaming file'
+          });
+        } else {
+          // Otherwise, just end the response
+          res.end();
+        }
+      });
+    } catch (storageError) {
+      console.error('Error accessing file in storage:', storageError);
+      return res.status(500).json({
+        success: false,
+        error: 'Error accessing file in storage'
+      });
+    }
+  } catch (error) {
+    console.error('Error downloading build:', error);
     res.status(500).json({
       success: false,
       error: 'Server Error'

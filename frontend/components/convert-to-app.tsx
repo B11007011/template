@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "@/components/ui/use-toast"
+import { useAuth } from "@/lib/auth"
 import api from "@/lib/api"
 
 export default function ConvertToApp() {
@@ -14,8 +15,15 @@ export default function ConvertToApp() {
   const [appName, setAppName] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
+  const { user, isConfigured } = useAuth();
 
   const handleConvertToApp = async () => {
+    // Check authentication first
+    if (!user) {
+      router.push("/account/login");
+      return;
+    }
+
     // Form validation
     if (!websiteUrl) {
       toast({
@@ -49,10 +57,10 @@ export default function ConvertToApp() {
 
       // Redirect to build success page with the build ID
       if (response && response.data && response.data.id) {
-        router.push(`/dashboard/build-success?id=${response.data.id}`)
+        router.push(`/account/dashboard/build-success?id=${response.data.id}`)
       } else {
         // Fallback to builds page if we don't have a build ID
-        router.push('/dashboard/build-download')
+        router.push('/account/dashboard/build-download')
       }
     } catch (error) {
       console.error('Error triggering build:', error)

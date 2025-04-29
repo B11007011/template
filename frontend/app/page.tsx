@@ -5,6 +5,7 @@ import { ArrowRight, Globe } from "lucide-react"
 import FeatureCard from "@/components/feature-card"
 import { features } from "@/lib/data"
 import ConvertToApp from "@/components/convert-to-app"
+import AuthLinks from "@/components/AuthLinks"
 
 export default function Home() {
   return (
@@ -17,15 +18,17 @@ export default function Home() {
             </Link>
           </div>
           <div className="flex items-center gap-4">
-            <Link href="/dashboard" className="text-sm text-gray-600 hover:text-gray-900">
-              Dashboard
-            </Link>
-            <Link 
-              href="/dashboard" 
-              className="inline-flex h-9 items-center justify-center rounded-md bg-[#8c52ff] px-4 py-2 text-sm font-medium text-white shadow transition-colors hover:bg-[#7a45e0] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
-            >
-              Get Started
-            </Link>
+            <AuthLinks>
+              <Link href="/account/dashboard" className="text-sm text-gray-600 hover:text-gray-900">
+                Dashboard
+              </Link>
+              <Link 
+                href="/account/dashboard" 
+                className="inline-flex h-9 items-center justify-center rounded-md bg-[#8c52ff] px-4 py-2 text-sm font-medium text-white shadow transition-colors hover:bg-[#7a45e0] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+              >
+                Get Started
+              </Link>
+            </AuthLinks>
           </div>
         </div>
       </header>
