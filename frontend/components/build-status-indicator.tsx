@@ -46,10 +46,11 @@ export default function BuildStatusIndicator({
         });
       }, 2000);
       
-      // Check build status every 5 seconds
+      // Check build status more frequently - every 3 seconds
       const statusCheck = setInterval(() => {
+        console.log(`Checking build status for build ${buildId}...`);
         fetchBuildStatus();
-      }, 5000);
+      }, 3000);
       
       return () => {
         if (interval) clearInterval(interval);
@@ -73,10 +74,13 @@ export default function BuildStatusIndicator({
   const fetchBuildStatus = async () => {
     try {
       setIsLoading(true);
+      console.log(`Fetching status for build ${buildId}...`);
       const response = await api.builds.getById(buildId);
+      console.log(`Build ${buildId} status response:`, response);
       
       if (response && response.data) {
         const newStatus = response.data.status;
+        console.log(`Current status: ${status}, New status: ${newStatus}`);
         
         // Only update if status has changed
         if (newStatus !== status) {
@@ -102,9 +106,12 @@ export default function BuildStatusIndicator({
             });
           }
         }
+      } else {
+        console.error(`Invalid response for build ${buildId}:`, response);
       }
     } catch (err) {
-      console.error("Error fetching build status:", err);
+      console.error(`Error fetching build status for ${buildId}:`, err);
+      console.error('Error details:', err instanceof Error ? err.message : String(err));
     } finally {
       setIsLoading(false);
     }

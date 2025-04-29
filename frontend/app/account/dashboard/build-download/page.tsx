@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { ArrowLeft, Download, Trash2, AlertCircle, Clock, CheckCircle, RefreshCw } from "lucide-react"
+import { ArrowLeft, Download, Trash2, AlertCircle, Clock, CheckCircle, RefreshCw, Globe, Type } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -12,6 +12,17 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { format } from "date-fns"
 import ApiDebug from "@/components/api-debug"
 import api from "@/lib/api"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 
 // Types
 interface Build {
@@ -33,30 +44,48 @@ export default function BuildDownloadPage() {
   const [error, setError] = useState<string | null>(null)
   const [triggeringBuild, setTriggeringBuild] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
+  
+  // New state for the build dialog form
+  const [buildDialogOpen, setBuildDialogOpen] = useState(false)
+  const [newBuildUrl, setNewBuildUrl] = useState("")
+  const [newAppName, setNewAppName] = useState("")
 
-  // Fetch builds on component mount
+  // Debug monitor for dialog state
   useEffect(() => {
-    fetchBuilds()
-  }, [])
+    console.log("Dialog state changed:", buildDialogOpen);
+  }, [buildDialogOpen]);
+
+  // Fetch builds on component mount and set up auto-refresh
+  useEffect(() => {
+    // Initial fetch
+    fetchBuilds();
+    
+    // No auto-refresh interval - only fetch when user requests it
+  }, []);
 
   // Fetch all builds from the API
   const fetchBuilds = async () => {
     setLoading(true)
     try {
+      console.log('Fetching builds from API...');
       const response = await api.builds.getAll()
       console.log('API Response:', response) // Debug log
       
       // Extract the builds array from the response
       if (response && response.data && Array.isArray(response.data)) {
+        console.log(`Found ${response.data.length} builds`);
         setBuilds(response.data)
       } else {
         console.error('Invalid API response format:', response)
+        console.error('Expected response.data to be an array but got:', 
+          response?.data ? typeof response.data : 'undefined or null');
         setBuilds([]) // Set to empty array to avoid mapping errors
         setError('Received invalid data format from the API.')
       }
       setError(null)
     } catch (err) {
       console.error('Error fetching builds:', err)
+      console.error('Error details:', err instanceof Error ? err.message : String(err));
       setBuilds([]) // Set to empty array to avoid mapping errors
       setError('Failed to load builds. Please try again.')
       toast({
@@ -98,13 +127,74 @@ export default function BuildDownloadPage() {
     }
   }
 
+  // Function to open the build dialog
+  const openBuildDialog = () => {
+    // Reset form fields
+    setNewBuildUrl("")
+    setNewAppName("")
+    // Open the dialog
+    console.log("Opening build dialog...");
+    setBuildDialogOpen(true);
+    
+    // Force dialog to open with a small delay if needed
+    setTimeout(() => {
+      if (!buildDialogOpen) {
+        console.log("Forcing dialog to open...");
+        setBuildDialogOpen(true);
+      }
+    }, 100);
+  }
+
+  // Helper function to get app name from URL if none is provided
+  const getAppNameFromUrl = (url: string): string => {
+    try {
+      // Add protocol if missing for URL parsing
+      let urlStr = url
+      if (!urlStr.startsWith('http://') && !urlStr.startsWith('https://')) {
+        urlStr = 'https://' + urlStr
+      }
+      
+      const urlObj = new URL(urlStr)
+      // Extract domain without www and TLD
+      const domain = urlObj.hostname.replace('www.', '')
+      // Capitalize first letter of each part
+      return domain.split('.')[0]
+        .split('-')
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ')
+    } catch (e) {
+      // If URL parsing fails, just return a default name
+      return "My App"
+    }
+  }
+
   // Trigger a new build
   const triggerBuild = async () => {
+    console.log("triggerBuild called with URL:", newBuildUrl);
+    
+    // Form validation
+    if (!newBuildUrl) {
+      console.log("URL validation failed - empty URL");
+      toast({
+        title: "Website URL Required",
+        description: "Please enter a valid website URL",
+        variant: "destructive"
+      })
+      return
+    }
+
+    // Use provided app name or generate from URL
+    const finalAppName = newAppName || getAppNameFromUrl(newBuildUrl)
+    console.log("Using app name:", finalAppName);
+    
     setTriggeringBuild(true)
+    setBuildDialogOpen(false) // Close the dialog
+    
     try {
+      console.log("Calling API to create build...");
       const response = await api.builds.createBuild({ 
-        appName: 'My Website',
-        webviewUrl: 'https://example.com'
+        appName: finalAppName,
+        webviewUrl: newBuildUrl
       })
       
       // Log the response to help with debugging
@@ -120,7 +210,7 @@ export default function BuildDownloadPage() {
       console.error('Error triggering build:', err)
       toast({
         title: "Error",
-        description: "Failed to trigger build",
+        description: "Failed to trigger build: " + (err instanceof Error ? err.message : String(err)),
         variant: "destructive",
       })
     } finally {
@@ -186,12 +276,149 @@ export default function BuildDownloadPage() {
           <Button 
             size="sm" 
             className="bg-[#8c52ff] hover:bg-[#7a45e0]"
-            onClick={triggerBuild}
+            type="button"
+            onClick={() => {
+              console.log("New Build button clicked");
+              openBuildDialog();
+            }}
+            disabled={triggeringBuild}
           >
-            New Build
+            {triggeringBuild ? "Creating..." : "New Build"}
           </Button>
         </div>
       </div>
+
+      {/* New Build Dialog */}
+      <Dialog open={buildDialogOpen} onOpenChange={setBuildDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Create New App Build</DialogTitle>
+            <DialogDescription>
+              Enter the website URL you want to convert to a mobile app.
+            </DialogDescription>
+          </DialogHeader>
+          <form 
+            onSubmit={(e) => {
+              e.preventDefault();
+              triggerBuild();
+            }}
+            className="space-y-4"
+          >
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="website-url" className="text-right">
+                Website URL
+              </Label>
+              <div className="col-span-3 relative">
+                <Globe className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                <Input
+                  id="website-url"
+                  placeholder="https://example.com"
+                  className="pl-8"
+                  value={newBuildUrl}
+                  onChange={(e) => setNewBuildUrl(e.target.value)}
+                    required
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="app-name" className="text-right">
+                App Name
+              </Label>
+              <div className="col-span-3 relative">
+                <Type className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                <Input
+                  id="app-name"
+                  placeholder="Optional (will be generated from URL)"
+                  className="pl-8"
+                  value={newAppName}
+                  onChange={(e) => setNewAppName(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline"
+                type="button"
+              onClick={() => setBuildDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              className="bg-[#8c52ff] hover:bg-[#7a45e0]"
+                type="submit"
+              disabled={triggeringBuild}
+            >
+              {triggeringBuild ? "Creating..." : "Create Build"}
+            </Button>
+          </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Fallback dialog in case the Dialog component isn't working */}
+      {buildDialogOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h2 className="text-xl font-bold mb-4">Create New App Build</h2>
+            <p className="text-gray-500 mb-4">Enter the website URL you want to convert to a mobile app.</p>
+            
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              triggerBuild();
+            }}>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label htmlFor="fb-website-url" className="font-medium">Website URL</label>
+                  <div className="relative">
+                    <Globe className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                    <input
+                      id="fb-website-url"
+                      placeholder="https://example.com"
+                      className="w-full pl-8 p-2 border rounded"
+                      value={newBuildUrl}
+                      onChange={(e) => setNewBuildUrl(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label htmlFor="fb-app-name" className="font-medium">App Name</label>
+                  <div className="relative">
+                    <Type className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                    <input
+                      id="fb-app-name"
+                      placeholder="Optional (will be generated from URL)"
+                      className="w-full pl-8 p-2 border rounded"
+                      value={newAppName}
+                      onChange={(e) => setNewAppName(e.target.value)}
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex justify-end gap-2 mt-6">
+                  <button
+                    type="button"
+                    className="px-4 py-2 border rounded hover:bg-gray-100"
+                    onClick={() => setBuildDialogOpen(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-[#8c52ff] hover:bg-[#7a45e0] text-white rounded"
+                    disabled={triggeringBuild}
+                  >
+                    {triggeringBuild ? "Creating..." : "Create Build"}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="grid grid-cols-1 gap-4">
@@ -235,9 +462,41 @@ export default function BuildDownloadPage() {
               <Download className="h-10 w-10 text-gray-400 mb-4" />
               <h3 className="text-lg font-medium mb-2">No Builds Available</h3>
               <p className="text-gray-500 mb-4">You haven't created any builds yet.</p>
-              <Button onClick={triggerBuild} className="bg-[#8c52ff] hover:bg-[#7a45e0]">
+              <Button 
+                type="button"
+                onClick={() => {
+                  console.log("Create First Build button clicked");
+                  openBuildDialog();
+                }} 
+                className="bg-[#8c52ff] hover:bg-[#7a45e0] mb-8"
+              >
                 Create Your First Build
               </Button>
+              
+              {/* Debug Section */}
+              <div className="w-full mt-6 border-t pt-6 text-left">
+                <h4 className="text-left text-lg font-medium mb-4">Build System Status</h4>
+                <div className="bg-gray-100 p-4 rounded-md text-sm">
+                  <p><strong>API URL:</strong> {process.env.NEXT_PUBLIC_API_URL}</p>
+                  <p><strong>Status:</strong> {error ? 'Error fetching builds' : 'No builds found'}</p>
+                  <p><strong>Troubleshooting:</strong></p>
+                  <ul className="list-disc pl-5 mt-1">
+                    <li>Make sure the backend server is running (port 5000)</li>
+                    <li>Check that you're logged in correctly</li>
+                    <li>Try creating a new build using the button above</li>
+                    <li>Check browser console for API errors</li>
+                  </ul>
+                </div>
+                <div className="mt-4">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => window.location.reload()}
+                  >
+                    Reload Page
+                  </Button>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>

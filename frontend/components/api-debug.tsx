@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import api from "@/lib/api"
 
 // API base URL
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
@@ -13,12 +14,14 @@ export default function ApiDebug() {
   const [response, setResponse] = useState<string>("")
   const [errorDetails, setErrorDetails] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [testType, setTestType] = useState<string>("general")
 
   const testConnection = async () => {
     setIsLoading(true)
     setStatus("Testing...")
     setResponse("")
     setErrorDetails(null)
+    setTestType("general")
 
     try {
       // Test connection to the API server with a simple GET request
@@ -59,6 +62,42 @@ export default function ApiDebug() {
       setIsLoading(false)
     }
   }
+  
+  const testBuilds = async () => {
+    setIsLoading(true)
+    setStatus("Testing Builds API...")
+    setResponse("")
+    setErrorDetails(null)
+    setTestType("builds")
+
+    try {
+      // Test the builds endpoint through our API client
+      console.log("Testing builds API endpoint...")
+      const response = await api.builds.getAll()
+      console.log("Builds API response:", response)
+      
+      setStatus(`Builds API OK (${response.success ? 'Success' : 'Failed'})`)
+      setResponse(JSON.stringify(response, null, 2))
+      
+      if (!response.success) {
+        setErrorDetails({
+          error: response.error || "Unknown error",
+          message: "The API returned an unsuccessful response"
+        })
+      }
+    } catch (error) {
+      console.error('Builds API test error:', error)
+      setStatus("Failed")
+      setResponse(error instanceof Error ? error.toString() : String(error))
+      setErrorDetails({
+        type: error instanceof Error ? error.constructor.name : typeof error,
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   return (
     <Card className="w-full">
@@ -74,13 +113,20 @@ export default function ApiDebug() {
               disabled={isLoading}
               className="bg-blue-600 hover:bg-blue-700"
             >
-              {isLoading ? "Testing..." : "Test Connection"}
+              {isLoading && testType === "general" ? "Testing..." : "Test Connection"}
+            </Button>
+            <Button 
+              onClick={testBuilds} 
+              disabled={isLoading}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {isLoading && testType === "builds" ? "Testing..." : "Test Builds API"}
             </Button>
             <div>
               <span className="font-semibold mr-2">Status:</span>
               <Badge className={
-                status === "Connection OK (200)" ? "bg-green-100 text-green-800" :
-                status === "Testing..." ? "bg-yellow-100 text-yellow-800" :
+                status.includes("OK") ? "bg-green-100 text-green-800" :
+                status.includes("Testing") ? "bg-yellow-100 text-yellow-800" :
                 status === "Not tested" ? "bg-gray-100 text-gray-800" :
                 "bg-red-100 text-red-800"
               }>
@@ -130,10 +176,10 @@ export default function ApiDebug() {
               <div className="mt-2 pt-2 border-t border-gray-200">
                 <strong>Quick Fixes:</strong>
                 <ul className="list-disc pl-5 mt-1">
-                  <li>Check if your backend server is running</li>
+                  <li>Check if your backend server is running on port 5000</li>
+                  <li>Make sure the backend is started with <code>cd backend && npm run dev</code></li>
                   <li>Verify the NEXT_PUBLIC_API_URL environment variable</li>
-                  <li>Ensure Firebase credentials are valid or mock data is enabled</li>
-                  <li>Check CORS configuration allows your frontend origin</li>
+                  <li>Check the console for any network errors</li>
                 </ul>
               </div>
             </div>
