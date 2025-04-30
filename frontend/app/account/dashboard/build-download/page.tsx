@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { ArrowLeft, Download, Trash2, AlertCircle, Clock, CheckCircle, RefreshCw, Globe, Type, X } from "lucide-react"
+import { ArrowLeft, Download, Trash2, AlertCircle, Clock, CheckCircle, RefreshCw, Globe, Type, X, Smartphone } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -12,6 +12,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { format, isValid } from "date-fns"
 import ApiDebug from "@/components/api-debug"
 import api from "@/lib/api"
+import QRCode from "react-qr-code"
 import {
   Dialog,
   DialogContent,
@@ -58,6 +59,12 @@ export default function BuildDownloadPage() {
   const [error, setError] = useState<string | null>(null)
   const [triggeringBuild, setTriggeringBuild] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [downloading, setDownloading] = useState<string | null>(null)
+  const [qrCodeModal, setQRCodeModal] = useState<{open: boolean, build: Build | null, fileType: 'apk' | 'aab'}>({
+    open: false,
+    build: null,
+    fileType: 'apk'
+  })
   
   // Success message state
   const [successMessage, setSuccessMessage] = useState<{
@@ -358,6 +365,28 @@ export default function BuildDownloadPage() {
     }
   };
 
+  // Function to get download URL for QR code
+  const getDownloadUrl = (build: Build, fileType: 'apk' | 'aab' = 'apk'): string => {
+    if (build.id === '14709933897') {
+      return `https://storage.googleapis.com/trader-35173.firebasestorage.app/builds/${build.id}/app.${fileType}`;
+    }
+    
+    if (build[fileType === 'apk' ? 'apkUrl' : 'aabUrl']) {
+      return build[fileType === 'apk' ? 'apkUrl' : 'aabUrl'] as string;
+    }
+    
+    return `${api.baseUrl}/builds/${build.id}/download?type=${fileType}`;
+  };
+
+  // Open QR Code Modal
+  const openQRCodeModal = (build: Build, fileType: 'apk' | 'aab' = 'apk') => {
+    setQRCodeModal({
+      open: true,
+      build,
+      fileType
+    });
+  };
+
   return (
     <div className="container mx-auto py-8">
       <div className="flex items-center justify-between mb-6">
@@ -567,6 +596,83 @@ export default function BuildDownloadPage() {
           </div>
         </div>
       )}
+
+      {/* QR Code Modal */}
+      <Dialog 
+        open={qrCodeModal.open} 
+        onOpenChange={(open) => setQRCodeModal(prev => ({...prev, open}))}
+      >
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Scan QR Code to Download</DialogTitle>
+            <DialogDescription>
+              {qrCodeModal.build && (
+                <>Use your mobile device to scan this QR code and download {qrCodeModal.build.appName}</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center justify-center py-4">
+            {qrCodeModal.build && (
+              <>
+                <div className="bg-white p-4 rounded-lg mb-4 border">
+                  <QRCode
+                    value={qrCodeModal.build ? getDownloadUrl(qrCodeModal.build, qrCodeModal.fileType) : ''}
+                    size={250}
+                    level="H"
+                  />
+                </div>
+                <div className="text-sm text-center space-y-2 max-w-xs mx-auto">
+                  <p className="font-medium">
+                    {qrCodeModal.build.appName} - {qrCodeModal.fileType.toUpperCase()}
+                  </p>
+                  <p className="text-gray-500">
+                    Scanning this code will download the {qrCodeModal.fileType.toUpperCase()} file directly to your device.
+                  </p>
+                  <div className="pt-2 text-xs text-gray-400 flex flex-col items-center">
+                    <p>Download URL:</p>
+                    <p className="truncate max-w-[300px] font-mono bg-gray-50 px-2 py-1 rounded">
+                      {getDownloadUrl(qrCodeModal.build, qrCodeModal.fileType)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 w-full">
+                  <div className="bg-yellow-50 border border-yellow-100 rounded-md p-3 text-sm text-yellow-800">
+                    <h4 className="font-medium mb-1 flex items-center">
+                      <AlertCircle className="h-4 w-4 mr-1" />
+                      Installation Instructions
+                    </h4>
+                    <ul className="list-disc pl-5 space-y-1">
+                      <li>When downloading APK files, you may need to allow installation from unknown sources</li>
+                      <li>AAB files are for publishing to the Google Play Store only</li>
+                    </ul>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+            <Button 
+              variant="outline"
+              className="sm:flex-1"
+              onClick={() => {
+                if (qrCodeModal.build) {
+                  downloadBuild(qrCodeModal.build.id, qrCodeModal.fileType);
+                }
+              }}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Download on This Device
+            </Button>
+            <Button 
+              className="bg-[#8c52ff] hover:bg-[#7a45e0] sm:flex-1"
+              onClick={() => setQRCodeModal(prev => ({...prev, open: false}))}
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {loading ? (
         <div className="grid grid-cols-1 gap-4">
@@ -786,28 +892,76 @@ export default function BuildDownloadPage() {
                             {build.status === 'completed' ? (
                               <>
                                 {build.apkUrl && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => downloadBuild(build.id, 'apk')}
-                                    disabled={downloading === build.id}
-                                    className="flex items-center gap-1"
-                                  >
-                                    <Download className="h-4 w-4" />
-                                    Download APK
-                                  </Button>
+                                  <div className="flex flex-col">
+                                    <div className="flex gap-1">
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => downloadBuild(build.id, 'apk')}
+                                        disabled={downloading === build.id}
+                                        className="flex-1 flex items-center justify-center"
+                                      >
+                                        {downloading === build.id ? (
+                                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                        ) : (
+                                          <Download className="h-4 w-4 mr-2" />
+                                        )}
+                                        {downloading === build.id ? "Downloading..." : "Download APK"}
+                                      </Button>
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              onClick={() => openQRCodeModal(build, 'apk')}
+                                              className="px-2"
+                                            >
+                                              <Smartphone className="h-4 w-4" />
+                                            </Button>
+                                          </TooltipTrigger>
+                                          <TooltipContent>
+                                            <p>Show QR code for mobile download</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    </div>
+                                  </div>
                                 )}
                                 {build.aabUrl && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => downloadBuild(build.id, 'aab')}
-                                    disabled={downloading === build.id}
-                                    className="flex items-center gap-1"
-                                  >
-                                    <Download className="h-4 w-4" />
-                                    Download AAB
-                                  </Button>
+                                  <div className="flex gap-1">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => downloadBuild(build.id, 'aab')}
+                                      disabled={downloading === build.id}
+                                      className="flex-1 flex items-center justify-center"
+                                    >
+                                      {downloading === build.id ? (
+                                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                      ) : (
+                                        <Download className="h-4 w-4 mr-2" />
+                                      )}
+                                      {downloading === build.id ? "Downloading..." : "Download AAB"}
+                                    </Button>
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => openQRCodeModal(build, 'aab')}
+                                            className="px-2"
+                                          >
+                                            <Smartphone className="h-4 w-4" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <p>Show QR code for mobile download</p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  </div>
                                 )}
                               </>
                             ) : (
