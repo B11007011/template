@@ -99,6 +99,9 @@ export async function apiRequest(endpoint, options = {}) {
  * API client with methods for different endpoints
  */
 const api = {
+  // Export the base URL for use in components
+  baseUrl: API_URL,
+  
   // Builds endpoints
   builds: {
     getAll: () => apiRequest('/builds'),

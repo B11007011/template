@@ -32,7 +32,7 @@ let googleProvider: GoogleAuthProvider | undefined;
 
 // Check if Firebase is properly configured
 const isConfigValid = () => {
-  return (
+  return Boolean(
     firebaseConfig.apiKey && 
     firebaseConfig.apiKey !== 'AIzaSyDOCAbC123dEf456GhI789jKl01-MnO' && 
     firebaseConfig.authDomain && 
@@ -87,7 +87,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const isConfigured = isConfigValid();
+  const isConfigured = Boolean(isConfigValid());
 
   // Handle setting authentication cookies for middleware
   const handleAuthChange = (user: User | null) => {

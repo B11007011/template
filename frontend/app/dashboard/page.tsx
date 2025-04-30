@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import MobileSidebar from "@/components/mobile-sidebar"
 import ConvertToApp from "@/components/convert-to-app"
+import UserAvatar from "@/components/UserAvatar"
 
 export default function Dashboard() {
   return (
@@ -20,7 +21,7 @@ export default function Dashboard() {
             </Link>
           </div>
           <div className="flex items-center gap-4">
-            <div className="w-8 h-8 rounded-full bg-gray-200"></div>
+            <UserAvatar />
           </div>
         </div>
       </header>

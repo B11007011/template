@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { useAuth } from "@/lib/auth"
 import api from "@/lib/api"
+import UserAvatar from "@/components/UserAvatar"
+import MobileSidebar from "@/components/mobile-sidebar"
 
 interface BuildStatus {
   id: string;
@@ -175,212 +177,228 @@ export default function BuildSuccessPage() {
   }
   
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="flex items-center mb-6">
-        <Link href="/dashboard" className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 mb-2 mr-4">
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Dashboard
-        </Link>
-        <Link href="/dashboard/build-download" className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 mb-2">
-          <Download className="mr-2 h-4 w-4" />
-          All Builds
-        </Link>
-      </div>
-      
-      <div className="max-w-2xl mx-auto">
-        {/* Status Card */}
-        <Card className="mb-6">
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <div>
-                <CardTitle>
-                  {!build ? "Loading Build..." : 
-                   build.status === 'completed' ? "Build Completed" :
-                   build.status === 'failed' ? "Build Failed" :
-                   "Build In Progress"}
-                </CardTitle>
-                <CardDescription>
-                  {!build ? "Loading details..." :
-                   build.status === 'completed' ? "Your app has been built successfully and is ready for download." :
-                   build.status === 'failed' ? "There was an error building your app." :
-                   "Your app is being built. This process typically takes 3-5 minutes."}
-                </CardDescription>
-              </div>
-              {build && (
-                <Badge 
-                  className={
-                    build.status === 'completed' ? 'bg-green-100 text-green-800' :
-                    build.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-red-100 text-red-800'
-                  }
-                >
-                  {build.status.toUpperCase()}
-                </Badge>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col gap-6">
-              {/* Build Info */}
-              {build && (
-                <div className="space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Build ID:</span>
-                    <span className="font-mono">{build.id}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">App Name:</span>
-                    <span>{build.appName}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Website URL:</span>
-                    <a 
-                      href={build.webviewUrl} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-[#8c52ff] hover:underline"
-                    >
-                      {build.webviewUrl}
-                    </a>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Created:</span>
-                    <span>{new Date(build.createdAt).toLocaleString()}</span>
-                  </div>
-                  {build.completedAt && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Completed:</span>
-                      <span>{new Date(build.completedAt).toLocaleString()}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-              
-              {/* Progress Bar */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium">Build Progress:</span>
-                  <span className="text-sm text-muted-foreground">{Math.round(progress)}%</span>
-                </div>
-                <Progress 
-                  value={progress} 
-                  className={
-                    build?.status === 'completed' ? 'bg-green-100' :
-                    build?.status === 'failed' ? 'bg-red-100' :
-                    'bg-gray-100'
-                  } 
-                />
-              </div>
-              
-              {/* Error Display */}
-              {error && (
-                <div className="bg-red-50 border border-red-100 rounded-md p-4 text-sm text-red-800">
-                  <p className="font-medium mb-1">Build Error:</p>
-                  <p>{error}</p>
-                </div>
-              )}
-              
-              {/* Pending Info Box */}
-              {(!build || build.status === 'pending') && (
-                <div className="bg-yellow-50 border border-yellow-100 rounded-md p-4 text-sm text-yellow-800">
-                  <p className="font-medium mb-1">While you wait:</p>
-                  <ul className="list-disc pl-5 space-y-1">
-                    <li>You can leave this page and come back later</li>
-                    <li>Builds are saved to your account</li>
-                    <li>You'll see a notification when your build is ready</li>
-                  </ul>
-                </div>
-              )}
-            </div>
-          </CardContent>
-          <CardFooter className="border-t pt-6 flex justify-between">
-            <Button 
-              variant="outline" 
-              onClick={handleRefresh}
-              disabled={loading}
-              className="flex items-center gap-2"
-            >
-              <RefreshCw className="h-4 w-4" />
-              Refresh Status
-            </Button>
-            
-            {build?.status === 'completed' ? (
-              <Button 
-                className="bg-[#8c52ff] hover:bg-[#7a45e0]"
-                onClick={viewBuild}
-              >
-                View Build
-              </Button>
-            ) : (
-              <Button 
-                className="bg-[#8c52ff] hover:bg-[#7a45e0]"
-                onClick={() => router.push('/dashboard/build-download')}
-              >
-                View All Builds
-              </Button>
-            )}
-          </CardFooter>
-        </Card>
-        
-        {/* What Happens Next Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle>What Happens Next?</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex gap-3">
-                <div className="flex-shrink-0 w-7 h-7 rounded-full bg-[#8c52ff] text-white flex items-center justify-center">
-                  1
-                </div>
-                <div>
-                  <h3 className="font-medium">Build Process</h3>
-                  <p className="text-sm text-gray-600">
-                    Our CI/CD pipeline is converting your website into a mobile app, 
-                    configuring the app settings based on your inputs.
-                  </p>
-                </div>
-              </div>
-              
-              <div className="flex gap-3">
-                <div className="flex-shrink-0 w-7 h-7 rounded-full bg-[#8c52ff] text-white flex items-center justify-center">
-                  2
-                </div>
-                <div>
-                  <h3 className="font-medium">Download Ready</h3>
-                  <p className="text-sm text-gray-600">
-                    Once completed, you'll be able to download both APK (for direct installation) 
-                    and AAB (for Play Store publishing) files.
-                  </p>
-                </div>
-              </div>
-              
-              <div className="flex gap-3">
-                <div className="flex-shrink-0 w-7 h-7 rounded-full bg-[#8c52ff] text-white flex items-center justify-center">
-                  3
-                </div>
-                <div>
-                  <h3 className="font-medium">Publish to Store</h3>
-                  <p className="text-sm text-gray-600">
-                    Use the AAB file to publish your app to the Google Play Store using your 
-                    developer account.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-          <CardFooter className="border-t pt-6">
-            <Link 
-              href="https://play.google.com/console/about/" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="inline-flex items-center text-[#8c52ff] text-sm font-medium"
-            >
-              Learn about Google Play Console
-              <ExternalLink className="ml-1 h-3 w-3" />
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-white border-b py-4 px-4 md:px-6">
+        <div className="container mx-auto flex items-center justify-between">
+          <div className="flex items-center">
+            <MobileSidebar />
+            <Link href="/" className="flex items-center gap-2">
+              <span className="text-2xl font-bold text-[#8c52ff]">Tecxmate</span>
             </Link>
-          </CardFooter>
-        </Card>
+          </div>
+          <div className="flex items-center gap-4">
+            <UserAvatar />
+          </div>
+        </div>
+      </header>
+      
+      <div className="container mx-auto py-8 px-4">
+        <div className="flex items-center mb-6">
+          <Link href="/dashboard" className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 mb-2 mr-4">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Dashboard
+          </Link>
+          <Link href="/dashboard/build-download" className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 mb-2">
+            <Download className="mr-2 h-4 w-4" />
+            All Builds
+          </Link>
+        </div>
+        
+        <div className="max-w-2xl mx-auto">
+          {/* Status Card */}
+          <Card className="mb-6">
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle>
+                    {!build ? "Loading Build..." : 
+                     build.status === 'completed' ? "Build Completed" :
+                     build.status === 'failed' ? "Build Failed" :
+                     "Build In Progress"}
+                  </CardTitle>
+                  <CardDescription>
+                    {!build ? "Loading details..." :
+                     build.status === 'completed' ? "Your app has been built successfully and is ready for download." :
+                     build.status === 'failed' ? "There was an error building your app." :
+                     "Your app is being built. This process typically takes 3-5 minutes."}
+                  </CardDescription>
+                </div>
+                {build && (
+                  <Badge 
+                    className={
+                      build.status === 'completed' ? 'bg-green-100 text-green-800' :
+                      build.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-red-100 text-red-800'
+                    }
+                  >
+                    {build.status.toUpperCase()}
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col gap-6">
+                {/* Build Info */}
+                {build && (
+                  <div className="space-y-3">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Build ID:</span>
+                      <span className="font-mono">{build.id}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">App Name:</span>
+                      <span>{build.appName}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Website URL:</span>
+                      <a 
+                        href={build.webviewUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-[#8c52ff] hover:underline"
+                      >
+                        {build.webviewUrl}
+                      </a>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Created:</span>
+                      <span>{new Date(build.createdAt).toLocaleString()}</span>
+                    </div>
+                    {build.completedAt && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Completed:</span>
+                        <span>{new Date(build.completedAt).toLocaleString()}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                {/* Progress Bar */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium">Build Progress:</span>
+                    <span className="text-sm text-muted-foreground">{Math.round(progress)}%</span>
+                  </div>
+                  <Progress 
+                    value={progress} 
+                    className={
+                      build?.status === 'completed' ? 'bg-green-100' :
+                      build?.status === 'failed' ? 'bg-red-100' :
+                      'bg-gray-100'
+                    } 
+                  />
+                </div>
+                
+                {/* Error Display */}
+                {error && (
+                  <div className="bg-red-50 border border-red-100 rounded-md p-4 text-sm text-red-800">
+                    <p className="font-medium mb-1">Build Error:</p>
+                    <p>{error}</p>
+                  </div>
+                )}
+                
+                {/* Pending Info Box */}
+                {(!build || build.status === 'pending') && (
+                  <div className="bg-yellow-50 border border-yellow-100 rounded-md p-4 text-sm text-yellow-800">
+                    <p className="font-medium mb-1">While you wait:</p>
+                    <ul className="list-disc pl-5 space-y-1">
+                      <li>You can leave this page and come back later</li>
+                      <li>Builds are saved to your account</li>
+                      <li>You'll see a notification when your build is ready</li>
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+            <CardFooter className="border-t pt-6 flex justify-between">
+              <Button 
+                variant="outline" 
+                onClick={handleRefresh}
+                disabled={loading}
+                className="flex items-center gap-2"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Refresh Status
+              </Button>
+              
+              {build?.status === 'completed' ? (
+                <Button 
+                  className="bg-[#8c52ff] hover:bg-[#7a45e0]"
+                  onClick={viewBuild}
+                >
+                  View Build
+                </Button>
+              ) : (
+                <Button 
+                  className="bg-[#8c52ff] hover:bg-[#7a45e0]"
+                  onClick={() => router.push('/dashboard/build-download')}
+                >
+                  View All Builds
+                </Button>
+              )}
+            </CardFooter>
+          </Card>
+          
+          {/* What Happens Next Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>What Happens Next?</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex gap-3">
+                  <div className="flex-shrink-0 w-7 h-7 rounded-full bg-[#8c52ff] text-white flex items-center justify-center">
+                    1
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Build Process</h3>
+                    <p className="text-sm text-gray-600">
+                      Our CI/CD pipeline is converting your website into a mobile app, 
+                      configuring the app settings based on your inputs.
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex gap-3">
+                  <div className="flex-shrink-0 w-7 h-7 rounded-full bg-[#8c52ff] text-white flex items-center justify-center">
+                    2
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Download Ready</h3>
+                    <p className="text-sm text-gray-600">
+                      Once completed, you'll be able to download both APK (for direct installation) 
+                      and AAB (for Play Store publishing) files.
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex gap-3">
+                  <div className="flex-shrink-0 w-7 h-7 rounded-full bg-[#8c52ff] text-white flex items-center justify-center">
+                    3
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Publish to Store</h3>
+                    <p className="text-sm text-gray-600">
+                      Use the AAB file to publish your app to the Google Play Store using your 
+                      developer account.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+            <CardFooter className="border-t pt-6">
+              <Link 
+                href="https://play.google.com/console/about/" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="inline-flex items-center text-[#8c52ff] text-sm font-medium"
+              >
+                Learn about Google Play Console
+                <ExternalLink className="ml-1 h-3 w-3" />
+              </Link>
+            </CardFooter>
+          </Card>
+        </div>
       </div>
     </div>
   )

@@ -13,6 +13,8 @@ import { format } from "date-fns"
 import ApiDebug from "@/components/api-debug"
 import api from "@/lib/api"
 import { useRouter } from "next/navigation"
+import UserAvatar from "@/components/UserAvatar"
+import MobileSidebar from "@/components/mobile-sidebar"
 import {
   Dialog,
   DialogContent,
@@ -52,6 +54,7 @@ export default function BuildDownloadPage() {
   const [error, setError] = useState<string | null>(null)
   const [triggeringBuild, setTriggeringBuild] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [downloading, setDownloading] = useState<string | null>(null)
   
   // New state for the build dialog form
   const [buildDialogOpen, setBuildDialogOpen] = useState(false)
@@ -345,55 +348,62 @@ export default function BuildDownloadPage() {
   };
 
   return (
-    <div className="container mx-auto py-8">
-      <div className="flex items-center justify-between mb-6">
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-white border-b py-4 px-4 md:px-6">
+        <div className="container mx-auto flex items-center justify-between">
+          <div className="flex items-center">
+            <MobileSidebar />
+            <Link href="/" className="flex items-center gap-2">
+              <span className="text-2xl font-bold text-[#8c52ff]">Tecxmate</span>
+            </Link>
+          </div>
+          <div className="flex items-center gap-4">
+            <UserAvatar />
+          </div>
+        </div>
+      </header>
+      
+      <div className="container mx-auto py-8 px-4">
+        <div className="mb-6 flex justify-between items-center">
         <div>
-          <Link href="/dashboard" className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 mb-2">
+            <Link href="/dashboard" className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Dashboard
           </Link>
-          <h1 className="text-2xl font-bold">App Builds</h1>
-          <p className="text-gray-500 mt-1">Manage and download your app builds</p>
+            <h1 className="text-2xl font-bold mt-2">My App Builds</h1>
         </div>
-        <div className="flex gap-3">
+          
           <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={fetchBuilds}
-          >
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Refresh
-          </Button>
-          <Button 
-            size="sm" 
-            className="bg-[#8c52ff] hover:bg-[#7a45e0]"
             onClick={openBuildDialog}
+            className="bg-[#8c52ff] hover:bg-[#7a45e0]"
           >
             New Build
           </Button>
-        </div>
       </div>
 
-      {/* Success message notification */}
       {successMessage && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 flex items-start">
-          <div className="bg-green-100 rounded-full p-1 mr-3 mt-0.5">
-            <CheckCircle className="h-5 w-5 text-green-600" />
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 flex justify-between items-center">
+          <div className="flex gap-3">
+            <div className="flex-shrink-0">
+              <CheckCircle className="h-6 w-6 text-green-500" />
           </div>
-          <div className="flex-1">
-            <h4 className="font-medium text-green-800">Build Triggered Successfully!</h4>
-            <p className="text-green-700 text-sm mt-1">
-              Your app build for <span className="font-medium">{successMessage.appName}</span> has been started.
-              Build ID: <span className="font-mono bg-green-100 px-1 rounded">{successMessage.buildId}</span>
-            </p>
-            <div className="flex gap-2 mt-3">
+            <div>
+              <h3 className="font-medium text-green-800">Build Successfully Triggered</h3>
+              <p className="text-green-700 text-sm">
+                Build for "{successMessage.appName}" has been started at {successMessage.timestamp}.
+              </p>
+              <div className="flex gap-2 mt-2">
               <Button 
                 size="sm" 
                 variant="outline" 
                 className="text-green-700 border-green-300 hover:bg-green-100"
-                onClick={() => setSuccessMessage(null)}
+                  onClick={() => {
+                    fetchBuilds() // Refresh the builds list
+                    setSuccessMessage(null) // Dismiss the message
+                  }}
               >
-                Dismiss
+                  <RefreshCw className="mr-1 h-3 w-3" />
+                  Refresh Builds
               </Button>
               <Button 
                 size="sm" 
@@ -404,6 +414,7 @@ export default function BuildDownloadPage() {
               >
                 Track Build Progress
               </Button>
+              </div>
             </div>
           </div>
           <Button 
@@ -722,6 +733,7 @@ export default function BuildDownloadPage() {
           ))}
         </div>
       )}
+    </div>
     </div>
   )
 } 
