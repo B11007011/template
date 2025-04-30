@@ -127,6 +127,48 @@ app.get('/api/debug', (req, res) => {
   });
 });
 
+// Firebase debug route to test Firebase connection
+app.get('/api/debug/firebase', (req, res) => {
+  try {
+    if (!admin.apps.length) {
+      return res.status(500).json({
+        success: false,
+        error: 'Firebase not initialized',
+        message: 'Firebase Admin SDK is not initialized. Check service-account.json'
+      });
+    }
+    
+    // Test Firestore connection
+    const db = admin.firestore();
+    db.collection('_test_').doc('_test_').get()
+      .then(() => {
+        return res.json({
+          success: true,
+          message: 'Firebase connection is working correctly',
+          firestore: true,
+          storage: !!admin.storage().bucket()
+        });
+      })
+      .catch(error => {
+        console.error('Firestore test failed:', error);
+        return res.status(500).json({
+          success: false,
+          error: 'Firestore connection failed',
+          errorCode: error.code,
+          errorMessage: error.message,
+          message: 'Firebase Firestore connection test failed'
+        });
+      });
+  } catch (error) {
+    console.error('Firebase debug route error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Firebase test error',
+      message: error.message
+    });
+  }
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
