@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { ArrowLeft, Download, Trash2, AlertCircle, Clock, CheckCircle, RefreshCw, Globe, Type, X, AlertTriangle, Inbox, MoreHorizontal, Calendar, ExternalLink } from "lucide-react"
+import { ArrowLeft, Download, Trash2, AlertCircle, Clock, CheckCircle, RefreshCw, Globe, Type, X, AlertTriangle, Inbox, MoreHorizontal, Calendar, ExternalLink, QrCode } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -33,6 +33,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import QRCodeModal from "@/components/QRCodeModal"
 
 // Types
 interface Build {
@@ -55,6 +56,15 @@ export default function BuildDownloadPage() {
   const [triggeringBuild, setTriggeringBuild] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [downloading, setDownloading] = useState<string | null>(null)
+  
+  // QR Code Modal state
+  const [qrModalOpen, setQrModalOpen] = useState(false)
+  const [qrModalData, setQrModalData] = useState<{
+    url: string;
+    title: string;
+    buildId: string;
+    fileType: 'apk' | 'aab';
+  } | null>(null)
   
   // New state for the build dialog form
   const [buildDialogOpen, setBuildDialogOpen] = useState(false)
@@ -345,6 +355,28 @@ export default function BuildDownloadPage() {
     } finally {
       setDownloading(null);
     }
+  };
+
+  // Open QR code modal for a build
+  const openQRCodeModal = (build: Build, fileType: 'apk' | 'aab' = 'apk') => {
+    let downloadUrl = '';
+    
+    // Handle Firebase Storage build
+    if (build.id === '14709933897') {
+      downloadUrl = `https://storage.googleapis.com/trader-35173.firebasestorage.app/builds/${build.id}/app.${fileType}`;
+    } else {
+      // Normal API download URL
+      downloadUrl = `${api.baseUrl}/builds/${build.id}/download?type=${fileType}`;
+    }
+    
+    setQrModalData({
+      url: downloadUrl,
+      title: `${build.appName} (${fileType.toUpperCase()})`,
+      buildId: build.id,
+      fileType: fileType
+    });
+    
+    setQrModalOpen(true);
   };
 
   return (
@@ -651,12 +683,26 @@ export default function BuildDownloadPage() {
                           <Download className="h-4 w-4" />
                           Download APK
                         </DropdownMenuItem>
-                      <DropdownMenuItem 
+                        <DropdownMenuItem 
                           onClick={() => downloadBuild(build.id, 'aab')}
+                          className="flex gap-2 cursor-pointer"
+                        >
+                          <Download className="h-4 w-4" />
+                          Download AAB
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => openQRCodeModal(build, 'apk')}
+                          className="flex gap-2 cursor-pointer"
+                        >
+                          <QrCode className="h-4 w-4" />
+                          QR Code (APK)
+                        </DropdownMenuItem>
+                      <DropdownMenuItem 
+                          onClick={() => openQRCodeModal(build, 'aab')}
                         className="flex gap-2 cursor-pointer"
                       >
-                        <Download className="h-4 w-4" />
-                          Download AAB
+                        <QrCode className="h-4 w-4" />
+                          QR Code (AAB)
                       </DropdownMenuItem>
                       </>
                     )}
@@ -704,9 +750,18 @@ export default function BuildDownloadPage() {
                       size="sm"
                       disabled={downloading === build.id}
                     className="flex items-center gap-1"
-                  >
-                    <Download className="h-4 w-4" />
+                    >
+                      <Download className="h-4 w-4" />
                       Download AAB
+                    </Button>
+                    <Button 
+                      onClick={() => openQRCodeModal(build, 'apk')}
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center gap-1"
+                  >
+                    <QrCode className="h-4 w-4" />
+                      QR Code
                   </Button>
                   </>
                 )}
@@ -732,6 +787,17 @@ export default function BuildDownloadPage() {
                       </div>
           ))}
         </div>
+      )}
+
+      {/* QR Code Modal */}
+      {qrModalData && (
+        <QRCodeModal
+          open={qrModalOpen}
+          onClose={() => setQrModalOpen(false)}
+          url={qrModalData.url}
+          title={qrModalData.title}
+          description={`Scan this QR code to download ${qrModalData.title}`}
+        />
       )}
     </div>
     </div>
