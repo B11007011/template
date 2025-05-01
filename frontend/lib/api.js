@@ -14,6 +14,15 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 export async function apiRequest(endpoint, options = {}) {
   const url = `${API_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
   
+  // Enhanced debug logging
+  console.log(`API Request Details:
+  - Method: ${options.method || 'GET'}
+  - URL: ${url}
+  - Base URL: ${API_URL}
+  - Endpoint: ${endpoint}
+  - Full URL: ${url}
+  `);
+  
   const defaultOptions = {
     headers: {
       'Content-Type': 'application/json',

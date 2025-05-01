@@ -6,7 +6,7 @@ import { ArrowLeft, Download, Trash2, AlertCircle, Clock, CheckCircle, RefreshCw
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { toast } from "@/components/ui/use-toast"
+import { useToast } from "@/components/ui/use-toast"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { format } from "date-fns"
@@ -50,6 +50,7 @@ interface Build {
 }
 
 export default function BuildDownloadPage() {
+  const { toast } = useToast()
   const [builds, setBuilds] = useState<Build[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -200,6 +201,14 @@ export default function BuildDownloadPage() {
     });
     
     try {
+      // Special case for the static Firebase Storage build
+      if (buildId === '14709933897') {
+        console.log('Special case for the Firebase Storage build');
+        // This build is handled specially by the server
+      }
+      
+      // Make API request to delete build
+      console.log(`Making API request to delete build: ${buildId}`);
       await api.builds.deleteBuild(buildId);
       
       // Remove the build from state
@@ -215,7 +224,35 @@ export default function BuildDownloadPage() {
     } catch (err) {
       console.error('Error deleting build:', err);
       
-      // Show detailed error message
+      // Helper function to check if error has status property
+      const isApiError = (error: unknown): error is { status: number; message: string } => {
+        return typeof error === 'object' && 
+               error !== null && 
+               'status' in error && 
+               typeof (error as any).status === 'number';
+      };
+      
+      // Log detailed error info
+      if (isApiError(err)) {
+        console.error(`API Error: Status ${err.status}, Message: ${err.message}`);
+      }
+      
+      // Handle 404 errors specially
+      if (isApiError(err) && err.status === 404) {
+        console.log('Build not found on server, removing from UI anyway');
+        // If the build doesn't exist on the server but is in our UI, still remove it from UI
+        setBuilds((prevBuilds) => 
+          prevBuilds.filter(build => build.id !== buildId)
+        );
+        
+        toast({
+          title: "Build Deleted",
+          description: `The build was removed from your list. (Note: It may have been already deleted on the server)`,
+        });
+        return;
+      }
+      
+      // Show detailed error message for other errors
       toast({
         title: "Delete Failed",
         description: `Failed to delete build: ${err instanceof Error ? err.message : String(err)}`,

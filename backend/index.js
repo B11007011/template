@@ -1,5 +1,9 @@
 require('dotenv').config();
 
+// Force the use of real data regardless of configuration
+process.env.USE_MOCK_DATA = 'false';
+console.log('Forcing real data mode: USE_MOCK_DATA set to false');
+
 // Debug environment variables loading
 console.log('Environment variables loaded:');
 console.log('GITHUB_OWNER:', process.env.GITHUB_OWNER || 'undefined');
@@ -93,7 +97,7 @@ try {
   }
   
   console.error('Full error details:', JSON.stringify(error, null, 2));
-  console.log('Continuing with mock data enabled...');
+  console.log('Warning: Firebase initialization had issues but will attempt to use real data anyway');
 }
 
 // Middleware
@@ -109,8 +113,17 @@ app.use(express.urlencoded({ extended: true }));
 
 // Debug middleware to log all incoming requests
 app.use((req, res, next) => {
-  console.log(`Incoming request: ${req.method} ${req.url}`);
-  console.log('Request body:', req.body);
+  // Enhanced logging for all requests
+  console.log(`
+====== INCOMING REQUEST ======
+Method: ${req.method}
+URL: ${req.url}
+Path: ${req.path}
+Params: ${JSON.stringify(req.params)}
+Query: ${JSON.stringify(req.query)}
+Body: ${JSON.stringify(req.body)}
+=============================
+  `);
   next();
 });
 
@@ -143,7 +156,7 @@ app.get('/api/debug/firebase', (req, res) => {
     db.collection('_test_').doc('_test_').get()
       .then(() => {
         return res.json({
-          success: true,
+          success: true, 
           message: 'Firebase connection is working correctly',
           firestore: true,
           storage: !!admin.storage().bucket()
