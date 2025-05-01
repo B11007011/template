@@ -7,7 +7,6 @@ export function middleware(request: NextRequest) {
   
   // Check if the path is a protected route
   const isProtectedRoute = 
-    request.nextUrl.pathname.startsWith('/account/dashboard') ||
     request.nextUrl.pathname.startsWith('/dashboard');
   
   // If it's a protected route and there's no auth token, redirect to login
@@ -27,5 +26,5 @@ export function middleware(request: NextRequest) {
 
 // Configure the routes that this middleware should run on
 export const config = {
-  matcher: ['/account/dashboard/:path*', '/dashboard/:path*'],
+  matcher: ['/dashboard/:path*'],
 }; 

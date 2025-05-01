@@ -17,7 +17,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const router = useRouter()
   const searchParams = useSearchParams()
-  const redirectPath = searchParams?.get('redirect') || '/account/dashboard'
+  const redirectPath = searchParams?.get('redirect') || '/dashboard'
   const { user, signIn, signInWithGoogle, error, loading, isConfigured } = useAuth()
 
   useEffect(() => {
@@ -101,7 +101,7 @@ export default function LoginPage() {
             </Alert>
           )}
 
-          {redirectPath !== '/account/dashboard' && (
+          {redirectPath !== '/dashboard' && (
             <Alert className="mb-6">
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Authentication Required</AlertTitle>
