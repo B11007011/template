@@ -350,38 +350,23 @@ export default function BuildDownloadPage() {
     try {
       setDownloading(buildId);
       
-      // For our Firebase Storage build, handle direct download
-      if (buildId === '14709933897') {
-        const url = `https://storage.googleapis.com/trader-35173.firebasestorage.app/builds/${buildId}/app.${fileType}`;
-        
-        // Create temporary anchor element to trigger download
-        const link = document.createElement('a');
-        link.href = url;
-        link.target = '_blank';
-        link.download = `tecxmate.${fileType}`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        toast({
-          title: "Download Started",
-          description: `${fileType.toUpperCase()} download has started. Check your browser's download folder.`,
-        });
-        
-        setDownloading(null);
-        return;
-      }
+      // Always use Firebase Storage URL for all builds
+      const url = `https://storage.googleapis.com/trader-35173.firebasestorage.app/builds/${buildId}/app.${fileType}`;
       
-      // Normal API download flow
-      const downloadUrl = `${api.baseUrl}/builds/${buildId}/download?type=${fileType}`;
-      
-      // Open the download URL in a new tab
-      window.open(downloadUrl, '_blank');
+      // Create temporary anchor element to trigger download
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.download = `tecxmate.${fileType}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
       
       toast({
         title: "Download Started",
-        description: `Your build is downloading. If it doesn't start automatically, check your browser settings.`,
+        description: `${fileType.toUpperCase()} download has started. Check your browser's download folder.`,
       });
+      
     } catch (error) {
       console.error('Error initiating download:', error);
       toast({
@@ -396,15 +381,8 @@ export default function BuildDownloadPage() {
 
   // Open QR code modal for a build
   const openQRCodeModal = (build: Build, fileType: 'apk' | 'aab' = 'apk') => {
-    let downloadUrl = '';
-    
-    // Handle Firebase Storage build
-    if (build.id === '14709933897') {
-      downloadUrl = `https://storage.googleapis.com/trader-35173.firebasestorage.app/builds/${build.id}/app.${fileType}`;
-    } else {
-      // Normal API download URL
-      downloadUrl = `${api.baseUrl}/builds/${build.id}/download?type=${fileType}`;
-    }
+    // Always use Firebase Storage URL pattern for QR codes
+    const downloadUrl = `https://storage.googleapis.com/trader-35173.firebasestorage.app/builds/${build.id}/app.${fileType}`;
     
     setQrModalData({
       url: downloadUrl,
