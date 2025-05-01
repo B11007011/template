@@ -56,16 +56,16 @@ export default function UserLoginStatus() {
             </div>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              {/* <Link href="/account/dashboard" className="cursor-pointer flex w-full">
+              <Link href="/dashboard" className="cursor-pointer flex w-full">
                 <User className="mr-2 h-4 w-4" />
                 Dashboard
-              </Link> */}
+              </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link href="/dashboard/build-download" className="cursor-pointer flex w-full">
+              {/* <Link href="/dashboard/build-download" className="cursor-pointer flex w-full">
                 <Settings className="mr-2 h-4 w-4" />
                 My Builds
-              </Link>
+              </Link> */}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem 
