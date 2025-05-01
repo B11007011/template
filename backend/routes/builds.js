@@ -14,30 +14,104 @@ const useMockData = () => {
   return false;
 };
 
+// Helper to calculate expiration date (30 days from now)
+const calculateExpirationDate = () => {
+  const expirationDate = new Date();
+  expirationDate.setDate(expirationDate.getDate() + 30);
+  return expirationDate;
+};
+
+// Function to check and delete expired builds (files older than 30 days)
+const deleteExpiredBuilds = async () => {
+  try {
+    console.log('Checking for expired builds...');
+    const now = new Date();
+    
+    // Query all completed builds
+    const snapshot = await buildsCollection
+      .where('status', '==', 'completed')
+      .where('expirationDate', '<=', now)
+      .get();
+    
+    if (snapshot.empty) {
+      console.log('No expired builds found');
+      return;
+    }
+    
+    console.log(`Found ${snapshot.size} expired builds to delete`);
+    
+    // Delete each expired build
+    const batch = db.batch();
+    const deletedBuilds = [];
+    
+    for (const doc of snapshot.docs) {
+      const buildData = doc.data();
+      const buildId = doc.id;
+      
+      // Skip the special build
+      if (buildId === '14709933897') {
+        console.log(`Skipping deletion of special build ${buildId}`);
+        continue;
+      }
+      
+      console.log(`Deleting expired build ${buildId}`);
+      
+      // Delete files from Storage if they exist
+      if (buildData.buildPath) {
+        try {
+          await bucket.deleteFiles({
+            prefix: buildData.buildPath
+          });
+          console.log(`Deleted files for expired build ${buildId}`);
+        } catch (storageError) {
+          console.error(`Error deleting files from storage for build ${buildId}:`, storageError);
+        }
+      }
+      
+      // Queue document for deletion
+      batch.delete(doc.ref);
+      deletedBuilds.push(buildId);
+    }
+    
+    // Commit the batch deletion
+    if (deletedBuilds.length > 0) {
+      await batch.commit();
+      console.log(`Successfully deleted ${deletedBuilds.length} expired builds: ${deletedBuilds.join(', ')}`);
+    }
+  } catch (error) {
+    console.error('Error deleting expired builds:', error);
+  }
+};
+
+// Run expired builds cleanup every day
+setInterval(deleteExpiredBuilds, 24 * 60 * 60 * 1000);
+// Also run it once on server start
+setTimeout(deleteExpiredBuilds, 60 * 1000);
+
 // Initialize the special build record if it doesn't exist
 (async function initializeSpecialBuild() {
   const specialBuildId = '14709933897';
   try {
-    console.log(`Checking if special build ${specialBuildId} exists in Firebase...`);
-    const docRef = buildsCollection.doc(specialBuildId);
-    const doc = await docRef.get();
+    console.log(`Initializing special build ${specialBuildId}...`);
     
-    if (!doc.exists) {
-      console.log(`Special build ${specialBuildId} not found, creating it...`);
-      await docRef.set({
-        status: 'completed',
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        completedAt: admin.firestore.FieldValue.serverTimestamp(),
-        appName: 'Tecxmate',
-        webviewUrl: 'https://tw.tecxmate.com/en',
-        apkUrl: `https://storage.googleapis.com/trader-35173.firebasestorage.app/builds/${specialBuildId}/app.apk`,
-        aabUrl: `https://storage.googleapis.com/trader-35173.firebasestorage.app/builds/${specialBuildId}/app.aab`,
-        buildPath: `builds/${specialBuildId}`
-      });
-      console.log(`Special build ${specialBuildId} created successfully.`);
-    } else {
-      console.log(`Special build ${specialBuildId} already exists in Firebase.`);
-    }
+    // Never expires (specialBuildId is exempt from expiration)
+    const farFutureDate = new Date();
+    farFutureDate.setFullYear(farFutureDate.getFullYear() + 10);
+    
+    // Use set with merge to create or update without fetching first
+    await buildsCollection.doc(specialBuildId).set({
+      status: 'completed',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      expirationDate: farFutureDate,
+      appName: 'Tecxmate',
+      webviewUrl: 'https://tw.tecxmate.com/en',
+      apkUrl: `https://storage.googleapis.com/trader-35173.firebasestorage.app/builds/${specialBuildId}/app.apk`,
+      aabUrl: `https://storage.googleapis.com/trader-35173.firebasestorage.app/builds/${specialBuildId}/app.aab`,
+      buildPath: `builds/${specialBuildId}`
+    }, { merge: true });
+    
+    console.log(`Special build ${specialBuildId} initialized successfully.`);
   } catch (error) {
     console.error(`Error initializing special build ${specialBuildId}:`, error);
   }
@@ -53,10 +127,29 @@ router.get('/', async (req, res) => {
     const builds = [];
     
     snapshot.forEach(doc => {
-      builds.push({
+      const buildData = doc.data();
+      const build = {
         id: doc.id,
-        ...doc.data()
-      });
+        ...buildData
+      };
+      
+      // Calculate days remaining before expiration for completed builds
+      if (build.status === 'completed' && build.expirationDate) {
+        const now = new Date();
+        const expirationDate = build.expirationDate instanceof Date 
+          ? build.expirationDate 
+          : new Date(build.expirationDate);
+        
+        if (isNaN(expirationDate.getTime())) {
+          build.daysRemaining = null;
+        } else {
+          const diffTime = expirationDate.getTime() - now.getTime();
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          build.daysRemaining = Math.max(0, diffDays);
+        }
+      }
+      
+      builds.push(build);
     });
     
     console.log(`Successfully retrieved ${builds.length} builds from Firestore`);
@@ -107,6 +200,20 @@ router.get('/:id', async (req, res) => {
       ...doc.data()
     };
     
+    // Calculate days remaining before expiration for completed builds
+    if (buildData.status === 'completed' && buildData.expirationDate) {
+      const now = new Date();
+      const expirationDate = buildData.expirationDate instanceof Date 
+        ? buildData.expirationDate 
+        : new Date(buildData.expirationDate);
+      
+      if (!isNaN(expirationDate.getTime())) {
+        const diffTime = expirationDate.getTime() - now.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        buildData.daysRemaining = Math.max(0, diffDays);
+      }
+    }
+    
     // If the build is pending, check if the files exist in Firebase Storage
     if (buildData.status === 'pending') {
       try {
@@ -128,10 +235,14 @@ router.get('/:id', async (req, res) => {
           const apkUrl = `https://storage.googleapis.com/${bucket.name}/${buildPath}/app.apk`;
           const aabUrl = `https://storage.googleapis.com/${bucket.name}/${buildPath}/app.aab`;
           
+          // Calculate expiration date (30 days from now)
+          const expirationDate = calculateExpirationDate();
+          
           // Update the build in Firestore
           await buildsCollection.doc(buildId).update({
             status: 'completed',
             completedAt: admin.firestore.FieldValue.serverTimestamp(),
+            expirationDate: expirationDate,
             apkUrl,
             aabUrl,
             buildPath
@@ -140,6 +251,8 @@ router.get('/:id', async (req, res) => {
           // Update the response data
           buildData.status = 'completed';
           buildData.completedAt = new Date().toISOString();
+          buildData.expirationDate = expirationDate;
+          buildData.daysRemaining = 30; // Just completed, so 30 days remaining
           buildData.apkUrl = apkUrl;
           buildData.aabUrl = aabUrl;
           buildData.buildPath = buildPath;
@@ -264,19 +377,22 @@ router.post('/trigger', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const buildId = req.params.id;
+    console.log(`Attempting to delete build with ID: ${buildId}`);
     
     // Special case for our static Firebase Storage build
-    if (buildId === '14709933897') {
-      return res.json({
-        success: true,
-        data: {},
-        message: 'Demo build cannot be deleted from server'
-      });
-    }
+    // if (buildId === '14709933897') {
+    //   console.log(`Skipping deletion of special build ${buildId}`);
+    //   return res.json({
+    //     success: true,
+    //     data: {},
+    //     message: 'Demo build cannot be deleted from server'
+    //   });
+    // }
     
     const doc = await buildsCollection.doc(buildId).get();
     
     if (!doc.exists) {
+      console.log(`Build ${buildId} not found in Firestore`);
       return res.status(404).json({
         success: false,
         error: 'Build not found'
@@ -284,20 +400,26 @@ router.delete('/:id', async (req, res) => {
     }
     
     const buildData = doc.data();
+    console.log(`Found build to delete: ${buildId}, name: ${buildData.appName}, status: ${buildData.status}`);
     
     // Delete files from Storage if they exist
     if (buildData.buildPath) {
       try {
+        console.log(`Attempting to delete files from path: ${buildData.buildPath}`);
         await bucket.deleteFiles({
           prefix: buildData.buildPath
         });
+        console.log(`Successfully deleted files from path: ${buildData.buildPath}`);
       } catch (storageError) {
-        console.error('Error deleting files from storage:', storageError);
+        console.error(`Error deleting files from storage for build ${buildId}:`, storageError);
+        // Continue with document deletion even if file deletion fails
       }
     }
     
     // Delete the Firestore document
+    console.log(`Deleting Firestore document for build ${buildId}`);
     await buildsCollection.doc(buildId).delete();
+    console.log(`Successfully deleted Firestore document for build ${buildId}`);
     
     res.json({
       success: true,
@@ -305,10 +427,22 @@ router.delete('/:id', async (req, res) => {
       message: 'Build deleted successfully'
     });
   } catch (error) {
-    console.error('Error deleting build:', error);
+    console.error(`Error deleting build ${req.params.id}:`, error);
+    
+    // Add specific error codes and more detail
+    if (error.code) {
+      console.error(`Firestore error code: ${error.code}`);
+    }
+    
+    if (error.details) {
+      console.error(`Error details: ${error.details}`);
+    }
+    
     res.status(500).json({
       success: false,
-      error: 'Server Error'
+      error: 'Server Error',
+      message: error.message || 'Unknown error occurred during deletion',
+      code: error.code
     });
   }
 });
@@ -407,64 +541,93 @@ router.get('/:id/download', async (req, res) => {
   }
 });
 
-// Add endpoint for manually creating a completed build record for existing files
-router.post('/sync-firebase-storage', async (req, res) => {
+// Endpoint to run the expired build cleanup manually
+router.post('/cleanup-expired', async (req, res) => {
   try {
-    const buildId = '14709933897'; // Our specific build ID that exists in Firebase Storage
-    
-    // Check if the build already exists in Firestore
-    const docRef = buildsCollection.doc(buildId);
-    const doc = await docRef.get();
-    
-    if (doc.exists) {
-      // If it exists, update it to make sure it's marked as completed
-      await docRef.update({
-        status: 'completed',
-        completedAt: admin.firestore.FieldValue.serverTimestamp(),
-        apkUrl: `https://storage.googleapis.com/${bucket.name}/builds/${buildId}/app.apk`,
-        aabUrl: `https://storage.googleapis.com/${bucket.name}/builds/${buildId}/app.aab`,
-        buildPath: `builds/${buildId}`
-      });
-      
-      return res.json({
-        success: true,
-        message: 'Build record updated to match Firebase Storage',
-        data: {
-          id: buildId,
-          ...doc.data(),
-          status: 'completed'
-        }
-      });
-    }
-    
-    // If it doesn't exist, create a new record
-    await docRef.set({
-      status: 'completed',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      completedAt: admin.firestore.FieldValue.serverTimestamp(),
-      appName: 'Tecxmate',
-      webviewUrl: 'https://tw.tecxmate.com/en',
-      apkUrl: `https://storage.googleapis.com/${bucket.name}/builds/${buildId}/app.apk`,
-      aabUrl: `https://storage.googleapis.com/${bucket.name}/builds/${buildId}/app.aab`,
-      buildPath: `builds/${buildId}`
-    });
-    
-    return res.status(201).json({
+    await deleteExpiredBuilds();
+    res.json({
       success: true,
-      message: 'New build record created to match Firebase Storage',
-      data: {
-        id: buildId,
-        status: 'completed',
-        appName: 'Tecxmate',
-        webviewUrl: 'https://tw.tecxmate.com/en'
-      }
+      message: 'Expired builds cleanup triggered successfully'
     });
   } catch (error) {
-    console.error('Error syncing Firebase Storage:', error);
+    console.error('Error running expired builds cleanup:', error);
     res.status(500).json({
       success: false,
       error: 'Server Error',
       message: error.message
+    });
+  }
+});
+
+// Force delete a build (only removes from Firestore, ignores storage errors)
+router.delete('/:id/force', async (req, res) => {
+  try {
+    const buildId = req.params.id;
+    console.log(`Force-deleting build with ID: ${buildId}`);
+    
+    // Special case for our static Firebase Storage build
+    if (buildId === '14709933897') {
+      console.log(`Cannot force-delete special build ${buildId}`);
+      return res.json({
+        success: true,
+        data: {},
+        message: 'Demo build cannot be deleted from server'
+      });
+    }
+    
+    const doc = await buildsCollection.doc(buildId).get();
+    
+    if (!doc.exists) {
+      console.log(`Build ${buildId} not found in Firestore`);
+      return res.status(404).json({
+        success: false,
+        error: 'Build not found'
+      });
+    }
+    
+    const buildData = doc.data();
+    console.log(`Found build to force-delete: ${buildId}, name: ${buildData.appName}, status: ${buildData.status}`);
+    
+    // Try to delete files from Storage if they exist, but continue even if it fails
+    if (buildData.buildPath) {
+      try {
+        console.log(`Attempting to delete files from path: ${buildData.buildPath}`);
+        await bucket.deleteFiles({
+          prefix: buildData.buildPath
+        });
+        console.log(`Successfully deleted files from path: ${buildData.buildPath}`);
+      } catch (storageError) {
+        console.error(`Error deleting files from storage for build ${buildId}:`, storageError);
+        console.log(`Continuing with Firestore document deletion despite storage error`);
+      }
+    }
+    
+    // Delete the Firestore document (this is the only important part in force delete)
+    console.log(`Deleting Firestore document for build ${buildId}`);
+    await buildsCollection.doc(buildId).delete();
+    console.log(`Successfully force-deleted Firestore document for build ${buildId}`);
+    
+    res.json({
+      success: true,
+      data: {},
+      message: 'Build force-deleted successfully'
+    });
+  } catch (error) {
+    console.error(`Error force-deleting build ${req.params.id}:`, error);
+    
+    if (error.code) {
+      console.error(`Firestore error code: ${error.code}`);
+    }
+    
+    if (error.details) {
+      console.error(`Error details: ${error.details}`);
+    }
+    
+    res.status(500).json({
+      success: false,
+      error: 'Server Error',
+      message: error.message || 'Unknown error occurred during force deletion',
+      code: error.code
     });
   }
 });

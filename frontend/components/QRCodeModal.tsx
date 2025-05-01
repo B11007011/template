@@ -12,9 +12,11 @@ interface QRCodeModalProps {
   url: string;
   title: string;
   description?: string;
+  daysRemaining?: number;
+  children?: React.ReactNode;
 }
 
-export default function QRCodeModal({ open, onClose, url, title, description }: QRCodeModalProps) {
+export default function QRCodeModal({ open, onClose, url, title, description, daysRemaining, children }: QRCodeModalProps) {
   const handleDownloadQR = () => {
     // Create a canvas from the QR code
     const svg = document.getElementById("download-qr-code");
@@ -53,25 +55,37 @@ export default function QRCodeModal({ open, onClose, url, title, description }: 
           </DialogDescription>
         </DialogHeader>
         
-        <div className="flex flex-col items-center justify-center p-4">
-          <div className="bg-white p-4 rounded-lg">
-            <QRCode
-              id="download-qr-code"
-              value={url}
-              size={256}
-              level="H"
-              className="h-64 w-64"
-            />
+        {children || (
+          <div className="flex flex-col items-center justify-center p-4">
+            <div className="bg-white p-4 rounded-lg">
+              <QRCode
+                id="download-qr-code"
+                value={url}
+                size={256}
+                level="H"
+                className="h-64 w-64"
+              />
+            </div>
+            
+            <div className="mt-4 text-sm text-gray-500 text-center">
+              {daysRemaining !== undefined && (
+                <p className={`mb-2 ${
+                  daysRemaining <= 5 ? 'text-red-600 font-medium' : 
+                  daysRemaining <= 10 ? 'text-orange-600' : 'text-blue-600'
+                }`}>
+                  {daysRemaining > 0 
+                    ? `⚠️ Files expire in ${daysRemaining} day${daysRemaining !== 1 ? 's' : ''}` 
+                    : '⚠️ Files expired (pending deletion)'}
+                </p>
+              )}
+              <p className="flex items-center justify-center gap-1">
+                <Smartphone className="h-4 w-4" />
+                Scan with your phone's camera
+              </p>
+              <p className="text-xs mt-1">{url}</p>
+            </div>
           </div>
-          
-          <div className="mt-4 text-sm text-gray-500 text-center">
-            <p className="flex items-center justify-center gap-1">
-              <Smartphone className="h-4 w-4" />
-              Scan with your phone's camera
-            </p>
-            <p className="text-xs mt-1">{url}</p>
-          </div>
-        </div>
+        )}
         
         <div className="flex justify-between mt-4">
           <Button variant="outline" onClick={onClose}>

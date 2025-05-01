@@ -80,16 +80,16 @@ export default function UserAvatar() {
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link href="/dashboard" className="cursor-pointer flex w-full">
+          {/* <Link href="/dashboard" className="cursor-pointer flex w-full">
             <Bell className="mr-2 h-4 w-4" />
             Notifications
-          </Link>
+          </Link> */}
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link href="/dashboard" className="cursor-pointer flex w-full">
+          {/* <Link href="/dashboard" className="cursor-pointer flex w-full">
             <Settings className="mr-2 h-4 w-4" />
             Settings
-          </Link>
+          </Link> */}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem 

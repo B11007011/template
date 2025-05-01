@@ -25,7 +25,28 @@ interface BuildStatus {
   aabUrl?: string;
   buildPath?: string;
   error?: string;
+  expirationDate?: string; // ISO date string when the build expires
+  daysRemaining?: number; // Days remaining before expiration
 }
+
+// Helper function to calculate days remaining if only expirationDate is provided
+const calculateDaysRemaining = (expirationDate: string | undefined): number | undefined => {
+  if (!expirationDate) return undefined;
+  
+  try {
+    const expirationTime = new Date(expirationDate).getTime();
+    const now = new Date().getTime();
+    
+    if (isNaN(expirationTime)) return undefined;
+    
+    const diffTime = expirationTime - now;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return Math.max(0, diffDays);
+  } catch (error) {
+    console.error('Error calculating days remaining:', error);
+    return undefined;
+  }
+};
 
 export default function BuildSuccessPage() {
   const router = useRouter()
@@ -63,6 +84,10 @@ export default function BuildSuccessPage() {
       
       // Special handling for our Firebase Storage build
       if (buildId === '14709933897') {
+        // Create a date 10 years in the future for the special build
+        const farFutureDate = new Date();
+        farFutureDate.setFullYear(farFutureDate.getFullYear() + 10);
+        
         setBuild({
           id: buildId,
           status: 'completed',
@@ -72,7 +97,9 @@ export default function BuildSuccessPage() {
           webviewUrl: 'https://tw.tecxmate.com/en',
           apkUrl: `https://storage.googleapis.com/trader-35173.firebasestorage.app/builds/${buildId}/app.apk`,
           aabUrl: `https://storage.googleapis.com/trader-35173.firebasestorage.app/builds/${buildId}/app.aab`,
-          buildPath: `builds/${buildId}`
+          buildPath: `builds/${buildId}`,
+          expirationDate: farFutureDate.toISOString(),
+          daysRemaining: 3650 // Approximately 10 years in days
         })
         setProgress(100)
         setLoading(false)
@@ -82,7 +109,19 @@ export default function BuildSuccessPage() {
       const response = await api.builds.getById(buildId)
       
       if (response && response.success && response.data) {
-        setBuild(response.data)
+        // Create a proper Build object with all fields including expiration data
+        const buildData = {
+          ...response.data,
+          // Make sure expirationDate is properly set if available
+          expirationDate: response.data.expirationDate || undefined
+        };
+        
+        // Calculate days remaining if not provided by backend but expiration date is available
+        if (buildData.daysRemaining === undefined && buildData.expirationDate) {
+          buildData.daysRemaining = calculateDaysRemaining(buildData.expirationDate);
+        }
+        
+        setBuild(buildData)
         
         // Handle different status cases
         if (response.data.status === 'completed') {
@@ -270,6 +309,22 @@ export default function BuildSuccessPage() {
                         <span>{new Date(build.completedAt).toLocaleString()}</span>
                       </div>
                     )}
+                    {/* Show expiration countdown if completed and has days remaining */}
+                    {build.status === 'completed' && build.daysRemaining !== undefined && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Files Expire:</span>
+                        <span className={
+                          build.daysRemaining <= 5 ? 'text-red-600 font-medium' : 
+                          build.daysRemaining <= 10 ? 'text-orange-600' : 'text-blue-600'
+                        }>
+                          {build.daysRemaining > 0 ? (
+                            <>In {build.daysRemaining} day{build.daysRemaining !== 1 ? 's' : ''}</>
+                          ) : (
+                            <>Soon (pending deletion)</>
+                          )}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
                 
@@ -294,6 +349,18 @@ export default function BuildSuccessPage() {
                   <div className="bg-red-50 border border-red-100 rounded-md p-4 text-sm text-red-800">
                     <p className="font-medium mb-1">Build Error:</p>
                     <p>{error}</p>
+                  </div>
+                )}
+                
+                {/* Expiration Warning */}
+                {build?.status === 'completed' && build.daysRemaining !== undefined && build.daysRemaining <= 5 && (
+                  <div className="bg-orange-50 border border-orange-100 rounded-md p-4 text-sm text-orange-800">
+                    <p className="font-medium mb-1">⚠️ File Expiration Warning:</p>
+                    <p>
+                      {build.daysRemaining > 0 
+                        ? `Your build files will be automatically deleted in ${build.daysRemaining} day${build.daysRemaining !== 1 ? 's' : ''}. Please download them before they expire.` 
+                        : 'Your build files are marked for deletion and will be removed soon. Please download them immediately if needed.'}
+                    </p>
                   </div>
                 )}
                 

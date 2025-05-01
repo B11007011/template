@@ -38,6 +38,8 @@ interface Build {
   aabUrl?: string;
   buildPath?: string;
   error?: string;
+  expirationDate?: string; // ISO date string when the build expires
+  daysRemaining?: number; // Days remaining before expiration
 }
 
 // Helper function to safely format dates
@@ -129,7 +131,9 @@ export default function BuildDownloadPage() {
             apkUrl: build.apkUrl,
             aabUrl: build.aabUrl,
             buildPath: build.buildPath,
-            error: build.error
+            error: build.error,
+            expirationDate: build.expirationDate,
+            daysRemaining: build.daysRemaining
           };
         });
         
@@ -962,6 +966,25 @@ export default function BuildDownloadPage() {
                                 <>Failed: {build.error || 'Unknown error'}</>
                               )}
                             </p>
+                            {/* Show expiration countdown if completed and has days remaining */}
+                            {build.status === 'completed' && build.daysRemaining !== undefined && (
+                              <div className={`mt-2 text-xs ${
+                                build.daysRemaining <= 5 ? 'text-red-600 font-medium' : 
+                                build.daysRemaining <= 10 ? 'text-orange-600' : 'text-gray-600'
+                              }`}>
+                                {build.daysRemaining > 0 ? (
+                                  <>
+                                    <Clock className="inline-block h-3 w-3 mr-1" />
+                                    Expires in {build.daysRemaining} day{build.daysRemaining !== 1 ? 's' : ''}
+                                  </>
+                                ) : (
+                                  <>
+                                    <AlertCircle className="inline-block h-3 w-3 mr-1" />
+                                    Expired (will be deleted soon)
+                                  </>
+                                )}
+                              </div>
+                            )}
                           </div>
                           <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                             build.status === 'completed' 

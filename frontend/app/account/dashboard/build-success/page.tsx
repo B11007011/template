@@ -26,6 +26,8 @@ interface BuildStatus {
   aabUrl?: string;
   buildPath?: string;
   error?: string;
+  expirationDate?: string; // ISO date string when the build expires
+  daysRemaining?: number; // Days remaining before expiration
 }
 
 export default function BuildSuccessPage() {
@@ -336,6 +338,22 @@ export default function BuildSuccessPage() {
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-500">Completed:</span>
                       <span>{new Date(build.completedAt).toLocaleString()}</span>
+                    </div>
+                  )}
+                  {/* Show expiration countdown if completed and has days remaining */}
+                  {build.status === 'completed' && build.daysRemaining !== undefined && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Files Expire:</span>
+                      <span className={
+                        build.daysRemaining <= 5 ? 'text-red-600 font-medium' : 
+                        build.daysRemaining <= 10 ? 'text-orange-600' : 'text-blue-600'
+                      }>
+                        {build.daysRemaining > 0 ? (
+                          <>In {build.daysRemaining} day{build.daysRemaining !== 1 ? 's' : ''}</>
+                        ) : (
+                          <>Soon (pending deletion)</>
+                        )}
+                      </span>
                     </div>
                   )}
                 </div>

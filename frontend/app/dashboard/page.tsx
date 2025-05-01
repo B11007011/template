@@ -1,15 +1,176 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { ArrowLeft, Bell, Download, Info, Layout, Palette, Code, Zap, Settings, Layers } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { Skeleton } from "@/components/ui/skeleton" 
+import { useToast } from "@/components/ui/use-toast"
 import MobileSidebar from "@/components/mobile-sidebar"
 import ConvertToApp from "@/components/convert-to-app"
 import UserAvatar from "@/components/UserAvatar"
+import api from "@/lib/api"
+
+// App data interface
+interface AppData {
+  id: string;
+  appName: string;
+  webviewUrl: string;
+  status: string;
+  createdAt: string;
+  completedAt?: string;
+  expirationDate?: string;
+  daysRemaining?: number;
+  version?: string;
+  appType?: string;
+  logo?: string;
+  error?: string;
+}
+
+// Check mark component for completed items
+const CheckMark = () => (
+  <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center">
+    <svg
+      className="w-3 h-3 text-green-600"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+        d="M5 13l4 4L19 7"
+      ></path>
+    </svg>
+  </div>
+);
 
 export default function Dashboard() {
+  const [appData, setAppData] = useState<AppData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const { toast } = useToast()
+
+  // Fetch app data
+  useEffect(() => {
+    const fetchAppData = async () => {
+      setLoading(true)
+      try {
+        // Get the most recent build
+        const response = await api.builds.getAll()
+        console.log('API Response:', response)
+        
+        if (response && response.data && Array.isArray(response.data) && response.data.length > 0) {
+          // Sort builds by creation date (newest first) and get the most recent one
+          const sortedBuilds = [...response.data].sort((a, b) => 
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          )
+          
+          const latestBuild = sortedBuilds[0]
+          
+          // Format the app data
+          const formattedAppData: AppData = {
+            id: latestBuild.id || '',
+            appName: latestBuild.appName || 'My App',
+            webviewUrl: latestBuild.webviewUrl || 'https://example.com',
+            status: latestBuild.status || 'pending',
+            createdAt: latestBuild.createdAt || new Date().toISOString(),
+            completedAt: latestBuild.completedAt,
+            expirationDate: latestBuild.expirationDate,
+            daysRemaining: latestBuild.daysRemaining || 30,
+            version: latestBuild.version || '1 (1.0)',
+            appType: latestBuild.appType || 'Android',
+            logo: latestBuild.logo || '',
+            error: latestBuild.error
+          }
+          
+          setAppData(formattedAppData)
+        } else {
+          // Create demo data if no builds exist
+          setAppData({
+            id: 'demo-app',
+            appName: 'My Website',
+            webviewUrl: 'https://mywebsite.com/',
+            status: 'completed',
+            createdAt: new Date().toISOString(),
+            daysRemaining: 30,
+            version: '1 (1.0)',
+            appType: 'Android'
+          })
+        }
+      } catch (err) {
+        console.error('Error fetching app data:', err)
+        setError('Failed to load app data. Please try again.')
+        
+        // Create demo data if API fails
+        setAppData({
+          id: 'demo-app',
+          appName: 'My Website',
+          webviewUrl: 'https://mywebsite.com/',
+          status: 'completed',
+          createdAt: new Date().toISOString(),
+          daysRemaining: 30,
+          version: '1 (1.0)',
+          appType: 'Android'
+        })
+        
+        toast({
+          title: "Data Connection Issue",
+          description: "Using demo data for testing. Real app data will appear when backend is connected.",
+          variant: "warning",
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    fetchAppData()
+  }, [toast])
+
+  // Delete app function
+  const handleDeleteApp = async () => {
+    if (!appData) return
+    
+    const confirmDelete = window.confirm(`Are you sure you want to delete ${appData.appName}?`)
+    if (!confirmDelete) return
+    
+    try {
+      await api.builds.deleteBuild(appData.id)
+      toast({
+        title: "App Deleted",
+        description: `${appData.appName} has been deleted successfully.`,
+      })
+      
+      // Reset to demo data after deletion
+      setAppData({
+        id: 'demo-app',
+        appName: 'My Website',
+        webviewUrl: 'https://mywebsite.com/',
+        status: 'completed',
+        createdAt: new Date().toISOString(),
+        daysRemaining: 30,
+        version: '1 (1.0)',
+        appType: 'Android'
+      })
+    } catch (err) {
+      console.error('Error deleting app:', err)
+      toast({
+        title: "Deletion Failed",
+        description: "There was an error deleting the app. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Get first letter of app name for logo
+  const getAppInitial = (name: string) => {
+    return name.charAt(0).toUpperCase()
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b py-4 px-4 md:px-6">
@@ -37,13 +198,13 @@ export default function Dashboard() {
               <Layers size={18} />
               Dashboard
             </Link>
-            <Link
+            {/* <Link
               href="#"
               className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100"
             >
               <Bell size={18} />
               Push Notification
-            </Link>
+            </Link> */}
             <Link
               href="/dashboard/build-download"
               className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100"
@@ -52,25 +213,25 @@ export default function Dashboard() {
               Build & Download
             </Link>
 
-            <div className="pt-4 pb-2">
+            {/* <div className="pt-4 pb-2">
               <div className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">App Settings</div>
-            </div>
+            </div> */}
 
-            <Link
+            {/* <Link
               href="#"
               className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100"
-            >
-              <Info size={18} />
-              App Info
-            </Link>
-            <Link
+            // >
+            //   <Info size={18} />
+            //   App Info
+            // </Link> */}
+            {/* <Link
               href="#"
               className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100"
             >
               <Layout size={18} />
               Splash Screen
-            </Link>
-            <Link
+            </Link> */}
+            {/* <Link
               href="#"
               className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100"
             >
@@ -83,21 +244,21 @@ export default function Dashboard() {
             >
               <Code size={18} />
               Custom CSS & JS
-            </Link>
-            <Link
+            </Link> */}
+            {/* <Link
               href="#"
               className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100"
             >
               <Zap size={18} />
               Integration Modules
-            </Link>
-            <Link
+            </Link> */}
+            {/* <Link
               href="#"
               className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100"
             >
               <Settings size={18} />
               Advanced Settings
-            </Link>
+            </Link> */}
           </nav>
         </div>
 
@@ -114,97 +275,55 @@ export default function Dashboard() {
             {/* App Info Card */}
             <Card className="col-span-1">
               <CardContent className="pt-6">
-                <div className="flex items-start gap-4">
-                  <div className="w-16 h-16 bg-[#8c52ff] rounded-lg flex items-center justify-center text-white">
-                    <span className="text-2xl font-bold">T</span>
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-semibold">My Website</h2>
-                    <p className="text-sm text-gray-500">Created for https://mywebsite.com/</p>
-
-                    <div className="mt-4 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center">
-                          <svg
-                            className="w-3 h-3 text-green-600"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth="2"
-                              d="M5 13l4 4L19 7"
-                            ></path>
-                          </svg>
+                {loading ? (
+                  <div className="space-y-4">
+                    <div className="flex items-start gap-4">
+                      <Skeleton className="w-16 h-16 rounded-lg" />
+                      <div className="space-y-2 flex-1">
+                        <Skeleton className="h-6 w-3/4" />
+                        <Skeleton className="h-4 w-full" />
+                        <div className="space-y-2 mt-4">
+                          <Skeleton className="h-5 w-2/3" />
+                          <Skeleton className="h-5 w-2/3" />
+                          <Skeleton className="h-5 w-2/3" />
+                          <Skeleton className="h-5 w-2/3" />
                         </div>
-                        <span className="text-sm">Create App</span>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center">
-                          <svg
-                            className="w-3 h-3 text-green-600"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth="2"
-                              d="M5 13l4 4L19 7"
-                            ></path>
-                          </svg>
-                        </div>
-                        <span className="text-sm">Upload Logo</span>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center">
-                          <svg
-                            className="w-3 h-3 text-green-600"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth="2"
-                              d="M5 13l4 4L19 7"
-                            ></path>
-                          </svg>
-                        </div>
-                        <span className="text-sm">Splash Screen</span>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center">
-                          <svg
-                            className="w-3 h-3 text-green-600"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth="2"
-                              d="M5 13l4 4L19 7"
-                            ></path>
-                          </svg>
-                        </div>
-                        <span className="text-sm">Build App</span>
                       </div>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="flex items-start gap-4">
+                    <div className="w-16 h-16 bg-[#8c52ff] rounded-lg flex items-center justify-center text-white">
+                      <span className="text-2xl font-bold">{appData ? getAppInitial(appData.appName) : 'T'}</span>
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-semibold">{appData?.appName || 'My Website'}</h2>
+                      <p className="text-sm text-gray-500">Created for {appData?.webviewUrl || 'https://mywebsite.com/'}</p>
+
+                      <div className="mt-4 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <CheckMark />
+                          <span className="text-sm">Create App</span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <CheckMark />
+                          <span className="text-sm">Upload Logo</span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <CheckMark />
+                          <span className="text-sm">Splash Screen</span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <CheckMark />
+                          <span className="text-sm">Build App</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -215,34 +334,54 @@ export default function Dashboard() {
                 <p className="text-sm text-gray-500">Basic overview of your app</p>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="bg-purple-100 p-4 rounded-lg">
-                    <div className="text-sm text-purple-600">Expires in</div>
-                    <div className="text-xl font-bold">30 Days</div>
+                {loading ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <Skeleton className="h-24 rounded-lg" />
+                      <Skeleton className="h-24 rounded-lg" />
+                      <Skeleton className="h-24 rounded-lg" />
+                    </div>
+                    <div className="flex justify-end gap-3 mt-4">
+                      <Skeleton className="h-10 w-24" />
+                      <Skeleton className="h-10 w-28" />
+                    </div>
                   </div>
-                  <div className="bg-green-100 p-4 rounded-lg">
-                    <div className="text-sm text-green-600">App Version</div>
-                    <div className="text-xl font-bold">1 (1.0)</div>
-                  </div>
-                  <div className="bg-orange-100 p-4 rounded-lg">
-                    <div className="text-sm text-orange-600">Application Type</div>
-                    <div className="text-xl font-bold">Android</div>
-                  </div>
-                </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="bg-purple-100 p-4 rounded-lg">
+                        <div className="text-sm text-purple-600">Expires in</div>
+                        <div className="text-xl font-bold">{appData?.daysRemaining || 30} Days</div>
+                      </div>
+                      <div className="bg-green-100 p-4 rounded-lg">
+                        <div className="text-sm text-green-600">App Version</div>
+                        <div className="text-xl font-bold">{appData?.version || '1 (1.0)'}</div>
+                      </div>
+                      <div className="bg-orange-100 p-4 rounded-lg">
+                        <div className="text-sm text-orange-600">Application Type</div>
+                        <div className="text-xl font-bold">{appData?.appType || 'Android'}</div>
+                      </div>
+                    </div>
 
-                <div className="flex flex-col sm:flex-row justify-end gap-3 mt-4">
-                  <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50">
-                    Delete App
-                  </Button>
-                  <Button className="bg-[#8c52ff] hover:bg-[#7a45e0]">Upgrade App</Button>
-                </div>
+                    <div className="flex flex-col sm:flex-row justify-end gap-3 mt-4">
+                      <Button 
+                        variant="outline" 
+                        className="text-red-600 border-red-200 hover:bg-red-50"
+                        onClick={handleDeleteApp}
+                      >
+                        Delete App
+                      </Button>
+                      <Button className="bg-[#8c52ff] hover:bg-[#7a45e0]">Upgrade App</Button>
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>
 
           {/* Integration Status Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-            <Card>
+            {/* <Card>
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
@@ -255,9 +394,9 @@ export default function Dashboard() {
                 </div>
                 <p className="text-sm text-gray-500">Connect Firebase to send Push Notification to app users.</p>
               </CardContent>
-            </Card>
+            </Card> */}
 
-            <Card>
+            {/* <Card>
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
@@ -270,9 +409,9 @@ export default function Dashboard() {
                 </div>
                 <p className="text-sm text-gray-500">Connect Admob to display Ads in the app and starting earning.</p>
               </CardContent>
-            </Card>
+            </Card> */}
 
-            <Card>
+            {/* <Card>
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
@@ -285,7 +424,7 @@ export default function Dashboard() {
                 </div>
                 <p className="text-sm text-gray-500">Caching loads the App Faster but slow to content changes.</p>
               </CardContent>
-            </Card>
+            </Card> */}
           </div>
 
           {/* Quick Convert Section */}
@@ -303,7 +442,7 @@ export default function Dashboard() {
 
           {/* Video Tutorials */}
           <div className="mt-6">
-            <Card>
+            {/* <Card>
               <CardHeader>
                 <CardTitle>Video Tutorials</CardTitle>
                 <p className="text-sm text-gray-500">Step by step guide to setup the complete app</p>
@@ -398,7 +537,7 @@ export default function Dashboard() {
                   </div>
                 </div>
               </CardContent>
-            </Card>
+            </Card> */}
           </div>
 
           {/* FAQs */}
