@@ -28,7 +28,7 @@ export default function PricingPage() {
             <Link href="/contact" className="hidden md:inline-flex">
               <Button variant="outline">Contact</Button>
             </Link>
-            <Link href="/dashboard">
+            <Link href="/dashboard/build-download">
               <Button className="bg-[#8c52ff] hover:bg-[#7a45e0]">Dashboard</Button>
             </Link>
           </div>

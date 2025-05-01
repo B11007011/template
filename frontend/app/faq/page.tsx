@@ -28,8 +28,8 @@ export default function FAQPage() {
             <Link href="/contact" className="hidden md:inline-flex">
               <Button variant="outline">Contact</Button>
             </Link>
-            <Link href="/account">
-              <Button className="bg-[#8c52ff] hover:bg-[#7a45e0]">Account</Button>
+            <Link href="/dashboard/build-download">
+              <Button className="bg-[#8c52ff] hover:bg-[#7a45e0]">Dashboard</Button>
             </Link>
           </div>
         </div>
