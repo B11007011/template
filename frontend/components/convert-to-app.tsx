@@ -57,10 +57,10 @@ export default function ConvertToApp() {
 
       // Redirect to build success page with the build ID
       if (response && response.data && response.data.id) {
-        router.push(`/account/dashboard/build-success?id=${response.data.id}`)
+        router.push(`/dashboard/build-success?id=${response.data.id}`)
       } else {
         // Fallback to builds page if we don't have a build ID
-        router.push('/account/dashboard/build-download')
+        router.push('/dashboard/build-download')
       }
     } catch (error) {
       console.error('Error triggering build:', error)
